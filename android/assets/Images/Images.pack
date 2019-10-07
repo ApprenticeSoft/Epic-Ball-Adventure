@@ -1,0 +1,70 @@
+
+Images.png
+format: RGBA8888
+filter: MipMapLinearNearest,MipMapLinearNearest
+repeat: none
+Ball
+  rotate: false
+  xy: 2, 8
+  size: 100, 100
+  orig: 100, 100
+  offset: 0, 0
+  index: -1
+Ball2
+  rotate: false
+  xy: 107, 8
+  size: 100, 100
+  orig: 100, 100
+  offset: 0, 0
+  index: -1
+BallColor
+  rotate: false
+  xy: 212, 8
+  size: 100, 100
+  orig: 100, 100
+  offset: 0, 0
+  index: -1
+Button
+  rotate: false
+  xy: 317, 57
+  size: 51, 51
+  split: 20, 30, 30, 20
+  orig: 51, 51
+  offset: 0, 0
+  index: -1
+ButtonChecked
+  rotate: false
+  xy: 373, 57
+  size: 51, 51
+  split: 23, 27, 27, 23
+  orig: 51, 51
+  offset: 0, 0
+  index: -1
+Exit_glow
+  rotate: false
+  xy: 429, 59
+  size: 49, 49
+  orig: 49, 49
+  offset: 0, 0
+  index: -1
+BallColor2
+  rotate: false
+  xy: 317, 22
+  size: 30, 30
+  orig: 30, 30
+  offset: 0, 0
+  index: -1
+Exit_background
+  rotate: false
+  xy: 352, 22
+  size: 30, 30
+  orig: 30, 30
+  offset: 0, 0
+  index: -1
+WhiteSquare
+  rotate: false
+  xy: 2, 2
+  size: 1, 1
+  orig: 1, 1
+  offset: 0, 0
+  index: -1
