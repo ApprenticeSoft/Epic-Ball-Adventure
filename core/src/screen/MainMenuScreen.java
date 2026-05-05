@@ -59,12 +59,8 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 		labelStyleStart.font = game.assets.get("font1.ttf", BitmapFont.class);
 
 		labelTitre = new Label(Variables.gameTitle, labelStyleTitre);
-		labelTitre.setX(0.5f * Gdx.graphics.getWidth() - labelTitre.getWidth()/2);
-		labelTitre.setY(0.5f * Gdx.graphics.getHeight() - labelTitre.getHeight()/2);
 
 		labelTitreOmbre = new Label(Variables.gameTitle, labelStyleOmbre);
-		labelTitreOmbre.setX(labelTitre.getX() + Gdx.graphics.getWidth()/380);
-		labelTitreOmbre.setY(labelTitre.getY() - Gdx.graphics.getWidth()/380);
 
 		if(Gdx.app.getType() == ApplicationType.Desktop)
 			labelStart = new Label("Press F to Start", labelStyleStart);
@@ -72,20 +68,15 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 			labelStart = new Label("Touch The Screen to Start", labelStyleStart);
 		else
 			labelStart = new Label("Press F or Touch to Start", labelStyleStart);
-		labelStart.setX(0.5f * Gdx.graphics.getWidth() - labelStart.getWidth()/2);
-		labelStart.setY(0.22f * Gdx.graphics.getWidth() - labelStart.getHeight()/2);
 
 		transitionImage = new Image(skin.getDrawable("WhiteSquare"));
-		transitionImage.setWidth(Gdx.graphics.getWidth());
-		transitionImage.setHeight(Gdx.graphics.getHeight());
 		transitionImage.setColor(new Color(237/256f, 27/256f, 81/256f,1));
-		transitionImage.setX(-Gdx.graphics.getWidth());
-		transitionImage.setY(0);
 		transitionImage.addAction(Actions.alpha(0));
 
 		stage.addActor(labelTitreOmbre);
 		stage.addActor(labelTitre);
 		stage.addActor(transitionImage);
+		resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 	}
 
 	@Override
@@ -104,6 +95,7 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 		if(startRequested || Gdx.input.isKeyPressed(Keys.F) || Gdx.input.isKeyPressed(Keys.SPACE)){
 			game.setScreen(new GameScreen(game));
+			dispose();
 		}
 
 	}
@@ -133,7 +125,22 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void resize(int width, int height) {
-		// TODO Auto-generated method stub
+		width = Math.max(1, width);
+		height = Math.max(1, height);
+		camera.setToOrtho(false, width, height);
+		camera.update();
+		stage.getViewport().update(width, height, true);
+
+		labelTitre.pack();
+		labelTitreOmbre.pack();
+		labelStart.pack();
+		labelTitre.setPosition(0.5f * width - labelTitre.getWidth()/2f,
+				0.5f * height - labelTitre.getHeight()/2f);
+		labelTitreOmbre.setPosition(labelTitre.getX() + width/380f,
+				labelTitre.getY() - width/380f);
+		labelStart.setPosition(0.5f * width - labelStart.getWidth()/2f,
+				0.22f * width - labelStart.getHeight()/2f);
+		transitionImage.setBounds(-width, 0, width, height);
 
 	}
 
@@ -157,7 +164,8 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void dispose() {
-		// TODO Auto-generated method stub
+		stage.dispose();
+		skin.dispose();
 
 	}
 

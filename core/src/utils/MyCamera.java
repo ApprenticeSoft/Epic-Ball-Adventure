@@ -2,7 +2,6 @@ package utils;
 
 import bodies.Balle;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.math.Interpolation;
@@ -11,35 +10,72 @@ import com.badlogic.gdx.math.Vector3;
 public class MyCamera extends  OrthographicCamera{
 
 	float posX, posY;
+	private final Vector3 target = new Vector3();
 
 	public MyCamera(){
 		super();
 	}
 
 	public void mouvement(Balle balle, TiledMap tiledMap){
-		//Positionnement par rapport à la balle
-		if(this.position.x < balle.getX() - Gdx.graphics.getWidth() * Variables.WORLD_TO_BOX/10)
-			posX = balle.getX() - Gdx.graphics.getWidth() * Variables.WORLD_TO_BOX/10;
-		else if(this.position.x > balle.getX() + Gdx.graphics.getWidth() * Variables.WORLD_TO_BOX/10)
-			posX = balle.getX() + Gdx.graphics.getWidth() * Variables.WORLD_TO_BOX/10;
-		if(this.position.y < balle.getY() - Gdx.graphics.getHeight() * Variables.WORLD_TO_BOX/10)
-			//this.position.set(this.position.x,balle.getY() - Gdx.graphics.getHeight() * Variables.WORLD_TO_BOX/10,0);
-			posY = balle.getY() - Gdx.graphics.getHeight() * Variables.WORLD_TO_BOX/10;
-		else if(this.position.y > balle.getY() + Gdx.graphics.getHeight() * Variables.WORLD_TO_BOX/10)
-			//this.position.set(this.position.x,balle.getY() + Gdx.graphics.getHeight() * Variables.WORLD_TO_BOX/10,0);
-			posY = balle.getY() + Gdx.graphics.getHeight() * Variables.WORLD_TO_BOX/10;
+		mouvement(balle, tiledMap, Variables.BOX_STEP);
+	}
 
-		this.position.interpolate(new Vector3(posX,posY,0), 0.45f, Interpolation.fade); //Mouvement transitoire de la caméra
+	public void mouvement(Balle balle, TiledMap tiledMap, float delta){
+		if(posX == 0 && posY == 0){
+			posX = this.position.x;
+			posY = this.position.y;
+		}
 
-		//Positionnement par rapport au niveau
-		if(this.position.x + this.viewportWidth/2 > ((float)(tiledMap.getProperties().get("width", Integer.class)*Variables.PPT))*Variables.WORLD_TO_BOX)
-			this.position.set(((float)(tiledMap.getProperties().get("width", Integer.class)*Variables.PPT))*Variables.WORLD_TO_BOX - this.viewportWidth/2, this.position.y, 0);
-		else if(this.position.x - this.viewportWidth/2 < 0)
-			this.position.set(this.viewportWidth/2, this.position.y, 0);
-		if(this.position.y + this.viewportHeight/2 > ((float)(tiledMap.getProperties().get("height", Integer.class)*Variables.PPT))*Variables.WORLD_TO_BOX)
-			this.position.set(this.position.x, ((float)(tiledMap.getProperties().get("height", Integer.class)*Variables.PPT))*Variables.WORLD_TO_BOX - this.viewportHeight/2, 0);
-		else if(this.position.y - this.viewportHeight/2 < 0)
-			this.position.set(this.position.x, this.viewportHeight/2, 0);
+		float deadZoneX = this.viewportWidth / 10f;
+		float deadZoneY = this.viewportHeight / 10f;
+
+		if(this.position.x < balle.getX() - deadZoneX)
+			posX = balle.getX() - deadZoneX;
+		else if(this.position.x > balle.getX() + deadZoneX)
+			posX = balle.getX() + deadZoneX;
+		if(this.position.y < balle.getY() - deadZoneY)
+			posY = balle.getY() - deadZoneY;
+		else if(this.position.y > balle.getY() + deadZoneY)
+			posY = balle.getY() + deadZoneY;
+
+		float alpha = 1f - (float)Math.pow(1f - 0.45f, Math.max(delta, 0f) / Variables.BOX_STEP);
+		if(alpha < 0f)
+			alpha = 0f;
+		else if(alpha > 1f)
+			alpha = 1f;
+		target.set(posX, posY, 0);
+		this.position.interpolate(target, alpha, Interpolation.fade);
+
+		clampToLevel(tiledMap);
+		posX = this.position.x;
+		posY = this.position.y;
+	}
+
+	private void clampToLevel(TiledMap tiledMap){
+		float levelWidth = ((float)(tiledMap.getProperties().get("width", Integer.class) * Variables.PPT)) * Variables.WORLD_TO_BOX;
+		float levelHeight = ((float)(tiledMap.getProperties().get("height", Integer.class) * Variables.PPT)) * Variables.WORLD_TO_BOX;
+
+		float clampedX;
+		if(levelWidth <= this.viewportWidth)
+			clampedX = levelWidth / 2f;
+		else if(this.position.x + this.viewportWidth / 2f > levelWidth)
+			clampedX = levelWidth - this.viewportWidth / 2f;
+		else if(this.position.x - this.viewportWidth / 2f < 0)
+			clampedX = this.viewportWidth / 2f;
+		else
+			clampedX = this.position.x;
+
+		float clampedY;
+		if(levelHeight <= this.viewportHeight)
+			clampedY = levelHeight / 2f;
+		else if(this.position.y + this.viewportHeight / 2f > levelHeight)
+			clampedY = levelHeight - this.viewportHeight / 2f;
+		else if(this.position.y - this.viewportHeight / 2f < 0)
+			clampedY = this.viewportHeight / 2f;
+		else
+			clampedY = this.position.y;
+
+		this.position.set(clampedX, clampedY, 0);
 
 	}
 }

@@ -12,8 +12,7 @@
             android:name="com.one.button.jam.AndroidLauncher"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="true"
-            android:label="@string/app_name"
-            android:screenOrientation="landscape">
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

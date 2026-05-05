@@ -118,4 +118,9 @@ public class Polygone extends Obstacle{
 		return couleurs.getCouleurSol();
 	}
 
+	public void disposeTexture(){
+		if(textureSolid != null)
+			textureSolid.dispose();
+	}
+
 }

@@ -32,6 +32,7 @@ public class Balle {
 	private float rayon, posXInit, posYInit;
 	public boolean droite = false, restart = false;
 	private boolean screenTouched = false;
+	private boolean controlHeld = false;
 	public float restartDelay = 3f, soundTrigger = 1;
 	public Sound soundCountdown;
 
@@ -80,147 +81,95 @@ public class Balle {
 	}
 
 	public void activity(){
-		if(Gdx.app.getType() == ApplicationType.Desktop)
-			desktopControl();
-		else if(Gdx.app.getType() == ApplicationType.Android)
-			androidControl();
-		else
-			webControl();
-
+		updateInput();
+		fixedStep();
+		updateTimers(Gdx.graphics.getDeltaTime());
 		if(restartDelay < 0)
 			Variables.restart = true;
 	}
 
 	public void desktopControl(){
-			if(Gdx.input.isKeyJustPressed(Keys.F)){
-				droite = !droite;
-			}
-
-			if(Gdx.input.isKeyPressed(Keys.F)){
-				if(droite){
-					if(body.getAngularVelocity() > 0)
-						body.applyTorque(-3.2f, true);
-					else
-						body.applyTorque(-2.0f, true);
-				}
-				else{
-					if(body.getAngularVelocity() < 0)
-						body.applyTorque(3.2f, true);
-					else
-						body.applyTorque(2.0f, true);
-				}
-	        }
-
-			if(restart){
-				restartDelay -= Gdx.graphics.getDeltaTime();
-				soundTrigger += Gdx.graphics.getDeltaTime();
-				if(soundTrigger >= 1){
-					soundCountdown.play();
-					soundTrigger = 0;
-				}
-			}
-			else if(Gdx.input.isKeyPressed(Keys.F)){
-				if(body.getLinearVelocity().len() < 3){
-					restartDelay -= Gdx.graphics.getDeltaTime();
-				}
-				else
-					restartDelay = 3f;
-			}
+		updateInput();
+		fixedStep();
+		updateTimers(Gdx.graphics.getDeltaTime());
 	}
 
 	public void androidControl(){
-		/*
-			if(Gdx.input.isTouched()){
-				if(!screenTouched)
-					droite = !droite;
-
-				screenTouched = true;
-			}
-			else
-				screenTouched = false;
-		*/
-			if(Gdx.input.isTouched()){
-				if(/*droite*/ Gdx.input.getX() > Gdx.graphics.getWidth()/2){
-					if(body.getAngularVelocity() > 0)
-						body.applyTorque(-3.2f, true);
-					else
-						body.applyTorque(-2.0f, true);
-				}
-				else{
-					if(body.getAngularVelocity() < 0)
-						body.applyTorque(3.2f, true);
-					else
-						body.applyTorque(2.0f, true);
-				}
-	        }
-
-			if(restart){
-				restartDelay -= Gdx.graphics.getDeltaTime();
-				soundTrigger += Gdx.graphics.getDeltaTime();
-				if(soundTrigger >= 1){
-					soundCountdown.play();
-					soundTrigger = 0;
-				}
-			}
-			else if(Gdx.input.isTouched()){
-				if(body.getLinearVelocity().len() < 3){
-					restartDelay -= Gdx.graphics.getDeltaTime();
-				}
-				else
-					restartDelay = 3f;
-			}
+		updateInput();
+		fixedStep();
+		updateTimers(Gdx.graphics.getDeltaTime());
 	}
 
 	public void webControl(){
-		boolean keyboardControl = Gdx.input.isKeyPressed(Keys.F) || Gdx.input.isKeyPressed(Keys.SPACE);
-		if(Gdx.input.isKeyJustPressed(Keys.F) || Gdx.input.isKeyJustPressed(Keys.SPACE)){
+		updateInput();
+		fixedStep();
+		updateTimers(Gdx.graphics.getDeltaTime());
+	}
+
+	public void updateInput(){
+		boolean keyboardControl = isKeyboardControlPressed();
+		boolean keyboardToggle = isKeyboardControlJustPressed();
+		boolean touchControl = Gdx.input.isTouched();
+
+		if(keyboardToggle || (touchControl && !screenTouched))
 			droite = !droite;
-		}
 
-		if(keyboardControl){
-			if(droite){
-				if(body.getAngularVelocity() > 0)
-					body.applyTorque(-3.2f, true);
-				else
-					body.applyTorque(-2.0f, true);
-			}
-			else{
-				if(body.getAngularVelocity() < 0)
-					body.applyTorque(3.2f, true);
-				else
-					body.applyTorque(2.0f, true);
-			}
-		}
-		else if(Gdx.input.isTouched()){
-			if(Gdx.input.getX() > Gdx.graphics.getWidth()/2){
-				if(body.getAngularVelocity() > 0)
-					body.applyTorque(-3.2f, true);
-				else
-					body.applyTorque(-2.0f, true);
-			}
-			else{
-				if(body.getAngularVelocity() < 0)
-					body.applyTorque(3.2f, true);
-				else
-					body.applyTorque(2.0f, true);
-			}
-		}
+		screenTouched = touchControl;
+		controlHeld = keyboardControl || touchControl;
+	}
 
+	public void fixedStep(){
+		if(!controlHeld || restart || Variables.levelComplete)
+			return;
+
+		if(droite){
+			if(body.getAngularVelocity() > 0)
+				body.applyTorque(-3.2f, true);
+			else
+				body.applyTorque(-2.0f, true);
+		}
+		else{
+			if(body.getAngularVelocity() < 0)
+				body.applyTorque(3.2f, true);
+			else
+				body.applyTorque(2.0f, true);
+		}
+	}
+
+	public void updateTimers(float delta){
 		if(restart){
-			restartDelay -= Gdx.graphics.getDeltaTime();
-			soundTrigger += Gdx.graphics.getDeltaTime();
+			restartDelay -= delta;
+			soundTrigger += delta;
 			if(soundTrigger >= 1){
 				soundCountdown.play();
 				soundTrigger = 0;
 			}
 		}
-		else if(keyboardControl || Gdx.input.isTouched()){
-			if(body.getLinearVelocity().len() < 3){
-				restartDelay -= Gdx.graphics.getDeltaTime();
-			}
+		else if(controlHeld){
+			if(body.getLinearVelocity().len() < 3)
+				restartDelay -= delta;
 			else
 				restartDelay = 3f;
 		}
+
+		if(restartDelay < 0)
+			Variables.restart = true;
+	}
+
+	private boolean isKeyboardControlPressed(){
+		if(Gdx.app.getType() == ApplicationType.Android)
+			return false;
+		if(Gdx.app.getType() == ApplicationType.Desktop)
+			return Gdx.input.isKeyPressed(Keys.F);
+		return Gdx.input.isKeyPressed(Keys.F) || Gdx.input.isKeyPressed(Keys.SPACE);
+	}
+
+	private boolean isKeyboardControlJustPressed(){
+		if(Gdx.app.getType() == ApplicationType.Android)
+			return false;
+		if(Gdx.app.getType() == ApplicationType.Desktop)
+			return Gdx.input.isKeyJustPressed(Keys.F);
+		return Gdx.input.isKeyJustPressed(Keys.F) || Gdx.input.isKeyJustPressed(Keys.SPACE);
 	}
 
 	public void draw(SpriteBatch batch, TextureAtlas textureAtlas, Couleurs couleurs){
@@ -265,5 +214,12 @@ public class Balle {
 		restartDelay = 3f;
 		restart = false;
 		droite = false;
+		screenTouched = false;
+		controlHeld = false;
+	}
+
+	public void disposeAudio(){
+		if(soundCountdown != null)
+			soundCountdown.dispose();
 	}
 }

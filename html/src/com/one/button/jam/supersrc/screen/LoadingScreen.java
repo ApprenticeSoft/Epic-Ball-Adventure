@@ -86,11 +86,8 @@ public class LoadingScreen implements Screen {
         textureLogo = new Texture(Gdx.files.internal("Images/Logo.png"), false);
         textureLogo.setFilter(TextureFilter.Linear, TextureFilter.Linear);
         imageLogo = new Image(textureLogo);
-        imageLogo.setHeight(5 * Gdx.graphics.getHeight() / 10f);
-        imageLogo.setWidth(imageLogo.getHeight() * textureLogo.getWidth() / textureLogo.getHeight());
-        imageLogo.setX(Gdx.graphics.getWidth() / 2f - imageLogo.getWidth() / 2f);
-        imageLogo.setY(Gdx.graphics.getHeight() / 2f - imageLogo.getHeight() / 2f);
         stage = new Stage();
+        resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
         game.assets.load("Images/Images.pack", TextureAtlas.class);
         game.assets.load("Sounds/Chock.wav", Sound.class);
@@ -131,8 +128,14 @@ public class LoadingScreen implements Screen {
 
     @Override
     public void resize(int width, int height) {
+        width = Math.max(1, width);
+        height = Math.max(1, height);
         camera.setToOrtho(false, width, height);
         stage.getViewport().update(width, height, true);
+        imageLogo.setHeight(5 * height / 10f);
+        imageLogo.setWidth(imageLogo.getHeight() * textureLogo.getWidth() / textureLogo.getHeight());
+        imageLogo.setPosition(width / 2f - imageLogo.getWidth() / 2f,
+                height / 2f - imageLogo.getHeight() / 2f);
     }
 
     @Override

@@ -38,11 +38,8 @@ public class LoadingScreen implements Screen{
 		textureLogo = new Texture(Gdx.files.internal("Images/Logo.png"), true);
 		textureLogo.setFilter(TextureFilter.MipMapLinearNearest, TextureFilter.MipMapLinearNearest);
 		imageLogo = new Image(textureLogo);
-		imageLogo.setHeight(5 * Gdx.graphics.getHeight()/10);
-		imageLogo.setWidth(imageLogo.getHeight() * textureLogo.getWidth() / textureLogo.getHeight());
-		imageLogo.setX(Gdx.graphics.getWidth()/2 - imageLogo.getWidth()/2);
-		imageLogo.setY(Gdx.graphics.getHeight()/2 - imageLogo.getHeight()/2);
 		stage = new Stage();
+		resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
 		//Chargement du TextureAtlas
 		game.assets.load("Images/Images.pack", TextureAtlas.class);
@@ -114,7 +111,15 @@ public class LoadingScreen implements Screen{
 
 	@Override
 	public void resize(int width, int height) {
-		// TODO Auto-generated method stub
+		width = Math.max(1, width);
+		height = Math.max(1, height);
+		camera.setToOrtho(false, width, height);
+		camera.update();
+		stage.getViewport().update(width, height, true);
+		imageLogo.setHeight(5 * height/10f);
+		imageLogo.setWidth(imageLogo.getHeight() * textureLogo.getWidth() / textureLogo.getHeight());
+		imageLogo.setPosition(width/2f - imageLogo.getWidth()/2f,
+				height/2f - imageLogo.getHeight()/2f);
 
 	}
 

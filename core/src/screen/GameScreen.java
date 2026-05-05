@@ -45,6 +45,9 @@ import com.one.button.jam.MyGdxGame;
 
 public class GameScreen extends InputAdapter implements Screen{
 
+	private static final float MAX_FRAME_DELTA = 0.25f;
+	private static final int MAX_PHYSICS_STEPS = 5;
+
 	final MyGdxGame game;
 	private MyCamera camera;
 	TiledMap tiledMap;
@@ -77,6 +80,14 @@ public class GameScreen extends InputAdapter implements Screen{
 
     FrameBuffer fbo;
     TextureRegion fboRegion;
+    private int fboWidth, fboHeight;
+    private float physicsAccumulator;
+    private boolean transitionInitialized;
+    private boolean nextLevelQueued;
+    private boolean gameCompleted;
+    private boolean disposed;
+    private final Vector2 transitionVelocity = new Vector2();
+    private final Vector3 projectedBallPosition = new Vector3();
 
 	public GameScreen(final MyGdxGame gam){
 		game = gam;
@@ -148,54 +159,46 @@ public class GameScreen extends InputAdapter implements Screen{
 		else
 		fragmentShader = Gdx.files.internal("Shaders/VignetteFAndroid.glsl").readString();
 	shaderProgram = new ShaderProgram(vertexShader,fragmentShader);
-	System.out.println("Shader log : " + shaderProgram.getLog());
 	//game.batch.setShader(shaderProgram);
 
 	shaderProgram.begin();
-	shaderProgram.setUniformf("u_resolution", camera.viewportWidth, camera.viewportHeight);
+	shaderProgram.setUniformf("u_resolution", Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 	shaderProgram.setUniformf("u_PosX", posX);
 	shaderProgram.setUniformf("u_PosY", posY);
 	shaderProgram.end();
 
-	fbo = new FrameBuffer(Format.RGB565, Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), false);
-
-        System.out.println("camera.viewportHeight = " + camera.viewportHeight);
-        System.out.println("camera.viewportWidth = " + camera.viewportWidth);
+	resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 	}
 
 	@Override
 	public void render(float delta) {
+		float frameDelta = Math.min(delta, MAX_FRAME_DELTA);
 		Gdx.gl.glClearColor(couleurs.getCouleurFond().r,couleurs.getCouleurFond().g,couleurs.getCouleurFond().b,1);
 		//Gdx.gl.glClearColor(0, 0, 0, 1);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        camera.mouvement(lecteurCarte.balle, tiledMap);
+
+		lecteurCarte.balle.updateInput();
+
+		if(!Variables.levelComplete)
+			stepPhysics(frameDelta);
+		else
+			physicsAccumulator = 0;
+
+        camera.mouvement(lecteurCarte.balle, tiledMap, frameDelta);
         camera.update();
-
-		world.step(Variables.BOX_STEP, Variables.BOX_VELOCITY_ITERATIONS, Variables.BOX_POSITION_ITERATIONS);
-        //debugRenderer.render(world, camera.combined);
-
-        lecteurCarte.activity();
+        polyBatch.setProjectionMatrix(camera.combined);
 
 		if(Variables.levelComplete)
-			levelComplete();
-		else{
-	        tiledMapRenderer.setView(camera);
-
-	        game.batch.begin();
-			lecteurCarte.draw(game.batch, textureAtlas/*, couleurs*/);
-			game.batch.end();
-
-			polyBatch.begin();
-			lecteurCarte.drawPolygone(polyBatch, camera);
-			polyBatch.end();
-		}
+			levelComplete(frameDelta);
+		else
+			drawGameplay();
 
 		//Level lost
-        if(lecteurCarte.balle.getY() < -5){
+        if(!Variables.levelComplete && lecteurCarte.balle.getY() < -5){
 	if(Variables.fallRestartDelay == 2.136f)
 	soundFall.play();
 
-	Variables.fallRestartDelay -= Gdx.graphics.getDeltaTime();
+	Variables.fallRestartDelay -= frameDelta;
 
 	if(Variables.fallRestartDelay <= 0)
 		Variables.restart = true;
@@ -220,12 +223,10 @@ public class GameScreen extends InputAdapter implements Screen{
 				if(fixtureA.getUserData() != null && fixtureB.getUserData() != null) {
 				//Finish the level
 				if(fixtureA.getUserData().equals("Ball") && fixtureB.getUserData().equals("Exit")){
-					Variables.levelComplete = true;
-					soundWin.play();
+					startLevelComplete();
 				}
 				else if(fixtureB.getUserData().equals("Ball") && fixtureA.getUserData().equals("Exit")){
-					Variables.levelComplete = true;
-					soundWin.play();
+					startLevelComplete();
 				}
 
 				    //Spring
@@ -334,10 +335,21 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void resize(int width, int height) {
-		ratio = (float)Gdx.graphics.getHeight()/(float)Gdx.graphics.getWidth();
-
+		width = Math.max(1, width);
+		height = Math.max(1, height);
+		ratio = (float)height/(float)width;
 		camera.setToOrtho(false, dimension * Variables.WORLD_TO_BOX, dimension * Variables.WORLD_TO_BOX * ratio);
+		if(lecteurCarte != null && tiledMap != null)
+			camera.mouvement(lecteurCarte.balle, tiledMap, 0);
         camera.update();
+        polyBatch.setProjectionMatrix(camera.combined);
+
+        Variables.updateGraphicsMetrics();
+        if(stage != null){
+			stage.getViewport().update(width, height, true);
+			layoutRestartLabels();
+        }
+        resizeFrameBuffer(width, height);
 	}
 
 	@Override
@@ -360,89 +372,214 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void dispose() {
-		// TODO Auto-generated method stub
+		if(disposed)
+			return;
+		disposed = true;
+
+		if(game.batch != null)
+			game.batch.setShader(null);
+		if(lecteurCarte != null)
+			lecteurCarte.disposeResources();
+		if(tiledMap != null)
+			tiledMap.dispose();
+		if(world != null)
+			world.dispose();
+		if(debugRenderer != null)
+			debugRenderer.dispose();
+		if(stage != null)
+			stage.dispose();
+		if(polyBatch != null)
+			polyBatch.dispose();
+		if(shaderProgram != null)
+			shaderProgram.dispose();
+		if(fbo != null)
+			fbo.dispose();
 	}
 
-	public void levelComplete(){
-		lecteurCarte.balle.body.getFixtureList().get(0).setSensor(true);
-		lecteurCarte.balle.body.setLinearVelocity(lecteurCarte.exit.body.getPosition().sub(lecteurCarte.balle.body.getPosition()));
-		lecteurCarte.balle.body.setAngularVelocity(1f);
+	private void stepPhysics(float frameDelta){
+		physicsAccumulator += frameDelta;
+		int steps = 0;
+		while(physicsAccumulator >= Variables.BOX_STEP && steps < MAX_PHYSICS_STEPS){
+			lecteurCarte.fixedStep();
+			world.step(Variables.BOX_STEP, Variables.BOX_VELOCITY_ITERATIONS, Variables.BOX_POSITION_ITERATIONS);
+			physicsAccumulator -= Variables.BOX_STEP;
+			steps++;
+		}
+		if(steps == MAX_PHYSICS_STEPS && physicsAccumulator >= Variables.BOX_STEP)
+			physicsAccumulator = 0;
+		lecteurCarte.updateTimers(frameDelta);
+	}
 
-		/*
-		 * TEST Shader
-		 */
-		posX = camera.project(new Vector3(lecteurCarte.balle.getX(),lecteurCarte.balle.getY(),0)).x / camera.viewportWidth;
-        posY = camera.project(new Vector3(lecteurCarte.balle.getX(),lecteurCarte.balle.getY(),0)).y / camera.viewportHeight;
-
-		shaderProgram.begin();
-        shaderProgram.setUniformf("u_PosX", posX);
-        shaderProgram.setUniformf("u_PosY", posY);
-        shaderProgram.setUniformf("outerRadius", outerRadius -= 18*Gdx.graphics.getDeltaTime());
-        shaderProgram.setUniformf("innerRadius", innerRadius -= 18*Gdx.graphics.getDeltaTime());
-        shaderProgram.end();
-
-	//Le FrameBuffer est le buffer utilisé
-	fbo.begin();
-	//On efface le le FrameBuffer avec du noir
-	Gdx.graphics.getGL20().glClearColor(couleurs.getCouleurFond().r,couleurs.getCouleurFond().g,couleurs.getCouleurFond().b,1);
-	//clear the color buffer
-	Gdx.graphics.getGL20().glClear( GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT );
-
-
-        lecteurCarte.balle.activity();
+	private void drawGameplay(){
         tiledMapRenderer.setView(camera);
-
+        game.batch.setProjectionMatrix(camera.combined);
         game.batch.begin();
-		//game.batch.setColor(1, 1, 1, 1);
 		lecteurCarte.draw(game.batch, textureAtlas/*, couleurs*/);
-		//game.batch.setShader(null);
 		game.batch.end();
 
+		polyBatch.setProjectionMatrix(camera.combined);
 		polyBatch.begin();
 		lecteurCarte.drawPolygone(polyBatch, camera);
 		polyBatch.end();
+	}
 
+	private void startLevelComplete(){
+		if(Variables.levelComplete || nextLevelQueued || gameCompleted)
+			return;
+		Variables.levelComplete = true;
+		soundWin.play();
+	}
+
+	public void levelComplete(float delta){
+		if(gameCompleted){
+			drawGameplay();
+			drawGameCompleted();
+			return;
+		}
+
+		initializeLevelTransition();
+		outerRadius -= 18 * delta;
+		innerRadius -= 18 * delta;
+
+		if(shaderProgram != null && shaderProgram.isCompiled()){
+			float resolutionX = fboWidth > 0 ? fboWidth : Gdx.graphics.getWidth();
+			float resolutionY = fboHeight > 0 ? fboHeight : Gdx.graphics.getHeight();
+			camera.project(projectedBallPosition.set(lecteurCarte.balle.getX(),lecteurCarte.balle.getY(),0));
+			posX = projectedBallPosition.x / resolutionX;
+	        posY = projectedBallPosition.y / resolutionY;
+
+			shaderProgram.begin();
+	        shaderProgram.setUniformf("u_PosX", posX);
+	        shaderProgram.setUniformf("u_PosY", posY);
+	        shaderProgram.setUniformf("outerRadius", outerRadius);
+	        shaderProgram.setUniformf("innerRadius", innerRadius);
+	        shaderProgram.end();
+		}
+
+		renderTransitionFrame();
+
+        if(outerRadius < 0){
+	if(Variables.niveauSelectione < Variables.nombreNiveaux)
+		queueNextLevel();
+	else{
+		gameCompleted = true;
+		drawGameplay();
+		drawGameCompleted();
+	}
+        }
+	}
+
+	public void levelRestart(){
+	labelRestart.setText("Restart in\n" + ((int)lecteurCarte.balle.restartDelay + 1));
+	labelRestartOmbre.setText("Restart in\n" + ((int)lecteurCarte.balle.restartDelay + 1));
+	layoutRestartLabels();
+
+	stage.act();
+	stage.draw();
+	}
+
+	private void initializeLevelTransition(){
+		if(transitionInitialized)
+			return;
+		transitionInitialized = true;
+		physicsAccumulator = 0;
+		lecteurCarte.balle.body.getFixtureList().get(0).setSensor(true);
+		transitionVelocity.set(lecteurCarte.exit.body.getPosition()).sub(lecteurCarte.balle.body.getPosition());
+		lecteurCarte.balle.body.setLinearVelocity(transitionVelocity);
+		lecteurCarte.balle.body.setAngularVelocity(1f);
+	}
+
+	private void renderTransitionFrame(){
+		if(fbo == null || fboRegion == null || shaderProgram == null || !shaderProgram.isCompiled()){
+			drawGameplay();
+			return;
+		}
+
+		fbo.begin();
+		Gdx.graphics.getGL20().glClearColor(couleurs.getCouleurFond().r,couleurs.getCouleurFond().g,couleurs.getCouleurFond().b,1);
+		Gdx.graphics.getGL20().glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+		drawGameplay();
 		fbo.end();
 
-		//On crée un texture unique à partir du FrameBuffer
-		fboRegion = new TextureRegion(fbo.getColorBufferTexture());
-		//Important pour remettre l'image à l'endroit
-		fboRegion.flip(false, true);
-
+		game.batch.setProjectionMatrix(camera.combined);
 		game.batch.begin();
 		game.batch.setColor(1, 1, 1, 1);
 		game.batch.setShader(shaderProgram);
 		game.batch.draw(fboRegion, camera.position.x - camera.viewportWidth/2, camera.position.y - camera.viewportHeight/2, camera.viewportWidth, camera.viewportHeight);
 		game.batch.setShader(null);
 		game.batch.end();
-
-
-        if(outerRadius < 0){
-	if(Variables.niveauSelectione < Variables.nombreNiveaux){
-			//Data.setLevel(Data.getLevel() + 1);
-		Variables.niveauSelectione++;
-			game.getScreen().dispose();
-			game.setScreen(new GameScreen(game));
-	}
-	else{
-	labelRestart.setText("Game Complete !\nThanks for playing !");
-	labelRestartOmbre.setText("Game Complete !\nThanks for playing !");
-
-	stage.act();
-	stage.draw();
-
-	}
-        }
 	}
 
-	public void levelRestart(){
-	System.out.println("Restart in " + ((int)lecteurCarte.balle.restartDelay + 1));
+	private void queueNextLevel(){
+		if(nextLevelQueued)
+			return;
+		nextLevelQueued = true;
+		Gdx.app.postRunnable(new Runnable() {
+			@Override
+			public void run() {
+				if(game.getScreen() != GameScreen.this)
+					return;
+				Variables.niveauSelectione++;
+				GameScreen nextScreen = new GameScreen(game);
+				game.setScreen(nextScreen);
+				GameScreen.this.dispose();
+			}
+		});
+	}
 
-	labelRestart.setText("Restart in\n" + ((int)lecteurCarte.balle.restartDelay + 1));
-	labelRestartOmbre.setText("Restart in\n" + ((int)lecteurCarte.balle.restartDelay + 1));
+	private void drawGameCompleted(){
+		labelRestart.setText("Game Complete !\nThanks for playing !");
+		labelRestartOmbre.setText("Game Complete !\nThanks for playing !");
+		layoutRestartLabels();
+		stage.act();
+		stage.draw();
+	}
 
-	stage.act();
-	stage.draw();
+	private void layoutRestartLabels(){
+		if(labelRestart == null || labelRestartOmbre == null)
+			return;
+		labelRestart.pack();
+		labelRestartOmbre.pack();
+		labelRestart.setPosition(0.5f * Gdx.graphics.getWidth() - labelRestart.getWidth()/2,
+				0.5f * Gdx.graphics.getHeight() - labelRestart.getHeight()/2);
+		labelRestartOmbre.setPosition(labelRestart.getX() + Gdx.graphics.getWidth()/380f,
+				labelRestart.getY() - Gdx.graphics.getWidth()/380f);
+	}
+
+	private void resizeFrameBuffer(int width, int height){
+		if(fbo != null && fboWidth == width && fboHeight == height){
+			updateShaderResolution();
+			return;
+		}
+		if(fbo != null)
+			fbo.dispose();
+		fbo = null;
+		fboRegion = null;
+		fboWidth = 0;
+		fboHeight = 0;
+
+		try{
+			fbo = new FrameBuffer(Format.RGB565, width, height, false);
+			fboRegion = new TextureRegion(fbo.getColorBufferTexture());
+			fboRegion.flip(false, true);
+			fboWidth = width;
+			fboHeight = height;
+		}
+		catch(RuntimeException ignored){
+			fbo = null;
+			fboRegion = null;
+		}
+		updateShaderResolution();
+	}
+
+	private void updateShaderResolution(){
+		if(shaderProgram == null || !shaderProgram.isCompiled())
+			return;
+		float resolutionX = fboWidth > 0 ? fboWidth : Gdx.graphics.getWidth();
+		float resolutionY = fboHeight > 0 ? fboHeight : Gdx.graphics.getHeight();
+		shaderProgram.begin();
+		shaderProgram.setUniformf("u_resolution", resolutionX, resolutionY);
+		shaderProgram.end();
 	}
 
 }

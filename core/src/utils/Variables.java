@@ -25,6 +25,11 @@ public class Variables {
 	public static float ombresX = (float)Gdx.graphics.getWidth()/800;
 	public static float ombresY =  - (float)Gdx.graphics.getHeight()/400;
 
+	public static void updateGraphicsMetrics(){
+		ombresX = (float)Gdx.graphics.getWidth()/800;
+		ombresY =  - (float)Gdx.graphics.getHeight()/400;
+	}
+
 	//Gestion des niveaux
 	public static int nombreNiveaux = 5;
 	public static int niveauSelectione = 1;

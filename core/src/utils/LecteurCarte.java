@@ -262,7 +262,7 @@ public class LecteurCarte {
         }
 	}
 
-	public void activity(){
+	public void fixedStep(){
 		for(Plateforme plateforme : plateformes)
 			plateforme.deplacement();
 		for(Spring spring : springs)
@@ -271,15 +271,26 @@ public class LecteurCarte {
 	obstacle.activity();
 		for(Eau water : waters)
 	water.activity();
-		balle.activity();
+		balle.fixedStep();
+	}
+
+	public void updateTimers(float delta){
+		balle.updateTimers(delta);
 	}
 
 	public void restart(){
 		Variables.fallRestartDelay = 2.136f;
 		balle.restart();
-		for(Spring spring : springs)
+	for(Spring spring : springs)
 			spring.initiate();
 		for(Obstacle obstacle : obstacles)
 	obstacle.initiate();
+	}
+
+	public void disposeResources(){
+		if(balle != null)
+			balle.disposeAudio();
+		for(Polygone polygone : polygones)
+			polygone.disposeTexture();
 	}
 }
