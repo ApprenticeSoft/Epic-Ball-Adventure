@@ -20,7 +20,7 @@ public class ObstacleRotatif extends Obstacle{
 
 		//Vitesse de rotation
 		if(rectangleObject.getProperties().get("Speed") != null)
-			vitesse = Float.parseFloat((String) rectangleObject.getProperties().get("Speed"));
+			vitesse = Float.parseFloat(rectangleObject.getProperties().get("Speed").toString());
 
 		body.setFixedRotation(false);
 		body.setAngularVelocity(vitesse*MathUtils.degreesToRadians);

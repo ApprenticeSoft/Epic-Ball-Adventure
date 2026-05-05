@@ -1,6 +1,7 @@
 package screen;
 
 import utils.Variables;
+import utils.DebugConfig;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Application.ApplicationType;
@@ -77,6 +78,8 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 		stage.addActor(labelTitre);
 		stage.addActor(transitionImage);
 		resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+		if(DebugConfig.autoAdvanceLevels)
+			startRequested = true;
 	}
 
 	@Override

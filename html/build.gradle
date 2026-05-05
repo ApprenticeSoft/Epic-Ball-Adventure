@@ -63,6 +63,8 @@ tasks.register("compileGwt", JavaExec) {
     description = "Compile GWT application"
     dependsOn(":core:classes", classes, "generateWebFonts")
 
+    def gwtStyle = project.findProperty("gwtStyle") ?: "OBF"
+
     mainClass = "com.google.gwt.dev.Compiler"
     jvmArgs = ["-Xmx3G"]
 
@@ -75,7 +77,7 @@ tasks.register("compileGwt", JavaExec) {
 
     args = [
             "-war", "$buildDir/gwt/out",
-            "-style", "OBF",
+            "-style", gwtStyle,
             "-logLevel", "WARN",
             "-localWorkers", "1",
             "com.one.button.jam.GdxDefinition"

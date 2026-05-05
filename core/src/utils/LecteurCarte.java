@@ -157,22 +157,20 @@ public class LecteurCarte {
 
         //Organisation des obstacles
         for(Obstacle obstacle : obstacles){
-	if(obstacle.getClass().toString().equals("class com.gravity.ball.body.ObstacleRessort"))
+	if(obstacle instanceof Spring)
 		obstaclesOrganises.add(obstacle);
         }
         for(Obstacle obstacle : obstacles){
-	if(!obstacle.getClass().toString().equals("class com.gravity.ball.body.ObstacleRessort") && !obstacle.getClass().toString().equals("class com.gravity.ball.body.Eau") && !obstacle.getClass().toString().equals("class com.gravity.ball.body.Obstacle"))
+	if(!(obstacle instanceof Spring) && !(obstacle instanceof Eau) && obstacle.getClass() != Obstacle.class)
 		obstaclesOrganises.add(obstacle);
         }
         for(Obstacle obstacle : obstacles){
-	if(obstacle.getClass().toString().equals("class com.gravity.ball.body.Eau")){
+	if(obstacle instanceof Eau)
 		obstaclesOrganises.add(obstacle);
-	}
         }
         for(Obstacle obstacle : obstacles){
-	if(obstacle.getClass().toString().equals("class com.gravity.ball.body.Obstacle")){
+	if(obstacle.getClass() == Obstacle.class)
 		obstaclesOrganises.add(obstacle);
-	}
         }
 	}
 
@@ -218,22 +216,6 @@ public class LecteurCarte {
 	public void drawObstacle(SpriteBatch batch, TextureAtlas textureAtlas){
 		 for(Obstacle obstacle : obstaclesOrganises)
 			 obstacle.draw(batch, textureAtlas);
-		/*
-        for(Obstacle obstacle : obstacles){
-	if(obstacle.getClass().toString().equals("class com.gravity.ball.body.ObstacleRessort")){
-		obstacle.draw(batch, textureAtlas);
-	}
-        }
-        for(Obstacle obstacle : obstacles){
-	if(!obstacle.getClass().toString().equals("class com.gravity.ball.body.ObstacleRessort") && !obstacle.getClass().toString().equals("class com.gravity.ball.body.Eau"))
-	obstacle.draw(batch, textureAtlas);
-        }
-        for(Obstacle obstacle : obstacles){
-	if(obstacle.getClass().toString().equals("class com.gravity.ball.body.Eau")){
-		obstacle.draw(batch, textureAtlas);
-	}
-        }
-        */
 	}
 
 	public void drawPolygone(PolygonSpriteBatch batch, MyCamera camera){

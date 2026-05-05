@@ -1,7 +1,9 @@
 package screen;
 
 import utils.Data;
+import utils.DebugConfig;
 import utils.LecteurCarte;
+import utils.LevelProgression;
 import utils.MyCamera;
 import utils.OrthogonalTiledMapRendererWithSprites;
 import utils.Variables;
@@ -89,6 +91,9 @@ public class GameScreen extends InputAdapter implements Screen{
     private boolean nextLevelQueued;
     private boolean gameCompleted;
     private boolean disposed;
+    private boolean transitionFallbackLogged;
+    private boolean debugAutoAdvanceTriggered;
+    private float debugAutoAdvanceElapsed;
     private final Vector2 transitionVelocity = new Vector2();
     private final Vector3 projectedBallPosition = new Vector3();
 
@@ -96,6 +101,9 @@ public class GameScreen extends InputAdapter implements Screen{
 		game = gam;
 
 		Variables.levelComplete = false;
+		DebugConfig.log("GameScreen construct begin level=" + Variables.niveauSelectione
+				+ " graphics=" + Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight()
+				+ " backBuffer=" + Gdx.graphics.getBackBufferWidth() + "x" + Gdx.graphics.getBackBufferHeight());
 
 		soundChock = game.assets.get("Sounds/Chock.wav", Sound.class);
 		soundFall = game.assets.get("Sounds/Fall.wav", Sound.class);
@@ -123,11 +131,22 @@ public class GameScreen extends InputAdapter implements Screen{
 
 		debugRenderer = new Box2DDebugRenderer();
 
+        DebugConfig.log("loading tmx level=" + Variables.niveauSelectione);
         tiledMap = new TmxMapLoader().load("Levels/Level "+ Variables.niveauSelectione + ".tmx");
+        DebugConfig.log("loaded tmx level=" + Variables.niveauSelectione
+				+ " map=" + tiledMap.getProperties().get("width", Integer.class)
+				+ "x" + tiledMap.getProperties().get("height", Integer.class));
         //tiledMap = new TmxMapLoader().load("Levels/Level 5.tmx");
         tiledMapRenderer = new OrthogonalTiledMapRendererWithSprites(tiledMap,Variables.WORLD_TO_BOX, game.batch);
 
         lecteurCarte = new LecteurCarte(gam, tiledMap, world, camera, couleurs);
+        DebugConfig.log("level objects level=" + Variables.niveauSelectione
+				+ " obstacles=" + lecteurCarte.obstacles.size
+				+ " drawObstacles=" + lecteurCarte.obstaclesOrganises.size
+				+ " polygons=" + lecteurCarte.polygones.size
+				+ " platforms=" + lecteurCarte.plateformes.size
+				+ " springs=" + lecteurCarte.springs.size
+				+ " water=" + lecteurCarte.waters.size);
 
         /*
          * Label restart
@@ -170,8 +189,11 @@ public class GameScreen extends InputAdapter implements Screen{
 		shaderProgram.setUniformf("u_center", posX, posY);
 		shaderProgram.end();
 	}
+	else
+		DebugConfig.log("shader compile failed level=" + Variables.niveauSelectione + " log=" + shaderProgram.getLog());
 
 	resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+	DebugConfig.log("GameScreen construct end level=" + Variables.niveauSelectione);
 	}
 
 	@Override
@@ -182,6 +204,7 @@ public class GameScreen extends InputAdapter implements Screen{
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
 		lecteurCarte.balle.updateInput();
+		updateDebugAutoAdvance(frameDelta);
 
 		if(!Variables.levelComplete)
 			stepPhysics(frameDelta);
@@ -434,6 +457,9 @@ public class GameScreen extends InputAdapter implements Screen{
 	private void startLevelComplete(){
 		if(Variables.levelComplete || nextLevelQueued || gameCompleted)
 			return;
+		DebugConfig.log("level complete start level=" + Variables.niveauSelectione
+				+ " ball=" + lecteurCarte.balle.body.getPosition()
+				+ " exit=" + lecteurCarte.exit.body.getPosition());
 		Variables.levelComplete = true;
 		soundWin.play();
 	}
@@ -451,11 +477,12 @@ public class GameScreen extends InputAdapter implements Screen{
 		updateVignetteState();
 		renderTransitionFrame();
 
-		if(transitionElapsed >= LEVEL_TRANSITION_DURATION){
-	if(Variables.niveauSelectione < Variables.nombreNiveaux)
+		if(LevelProgression.transitionComplete(transitionElapsed, LEVEL_TRANSITION_DURATION)){
+	if(LevelProgression.hasNextLevel(Variables.niveauSelectione, Variables.nombreNiveaux))
 		queueNextLevel();
 	else{
 		gameCompleted = true;
+		DebugConfig.log("game complete level=" + Variables.niveauSelectione);
 		drawGameCompleted();
 	}
         }
@@ -479,6 +506,15 @@ public class GameScreen extends InputAdapter implements Screen{
 		transitionStartRadius = getBackBufferDiagonal();
 		outerRadius = transitionStartRadius;
 		innerRadius = Math.max(0, outerRadius - getVignetteFeather());
+		DebugConfig.log("transition init level=" + Variables.niveauSelectione
+				+ " radius=" + outerRadius
+				+ " feather=" + getVignetteFeather()
+				+ " camera=" + camera.position
+				+ " viewport=" + camera.viewportWidth + "x" + camera.viewportHeight
+				+ " graphics=" + Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight()
+				+ " backBuffer=" + getBackBufferWidth() + "x" + getBackBufferHeight()
+				+ " shaderCompiled=" + (shaderProgram != null && shaderProgram.isCompiled())
+				+ " fbo=" + fboWidth + "x" + fboHeight);
 		lecteurCarte.balle.body.getFixtureList().get(0).setSensor(true);
 		transitionVelocity.set(lecteurCarte.exit.body.getPosition()).sub(lecteurCarte.balle.body.getPosition());
 		lecteurCarte.balle.body.setLinearVelocity(transitionVelocity);
@@ -486,7 +522,7 @@ public class GameScreen extends InputAdapter implements Screen{
 	}
 
 	private void updateVignetteState(){
-		float progress = Math.min(transitionElapsed / LEVEL_TRANSITION_DURATION, 1f);
+		float progress = LevelProgression.transitionProgress(transitionElapsed, LEVEL_TRANSITION_DURATION);
 		outerRadius = Math.max(1f, transitionStartRadius * (1f - progress));
 		innerRadius = Math.max(0, outerRadius - getVignetteFeather());
 
@@ -510,6 +546,14 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	private void renderTransitionFrame(){
 		if(fbo == null || fboRegion == null || shaderProgram == null || !shaderProgram.isCompiled()){
+			if(!transitionFallbackLogged){
+				transitionFallbackLogged = true;
+				DebugConfig.log("transition fallback draw level=" + Variables.niveauSelectione
+						+ " fbo=" + (fbo != null)
+						+ " fboRegion=" + (fboRegion != null)
+						+ " shader=" + (shaderProgram != null)
+						+ " shaderCompiled=" + (shaderProgram != null && shaderProgram.isCompiled()));
+			}
 			drawGameplay();
 			return;
 		}
@@ -533,17 +577,44 @@ public class GameScreen extends InputAdapter implements Screen{
 		if(nextLevelQueued)
 			return;
 		nextLevelQueued = true;
+		int nextLevel = LevelProgression.nextLevel(Variables.niveauSelectione, Variables.nombreNiveaux);
+		DebugConfig.log("queue next level from=" + Variables.niveauSelectione + " to=" + nextLevel
+				+ " elapsed=" + transitionElapsed);
 		Gdx.app.postRunnable(new Runnable() {
 			@Override
 			public void run() {
 				if(game.getScreen() != GameScreen.this)
 					return;
-				Variables.niveauSelectione++;
-				GameScreen nextScreen = new GameScreen(game);
-				game.setScreen(nextScreen);
-				GameScreen.this.dispose();
+				try{
+					Variables.niveauSelectione = nextLevel;
+					DebugConfig.log("constructing queued level=" + Variables.niveauSelectione);
+					GameScreen nextScreen = new GameScreen(game);
+					game.setScreen(nextScreen);
+					DebugConfig.log("queued level active level=" + Variables.niveauSelectione);
+					GameScreen.this.dispose();
+				}
+				catch(RuntimeException exception){
+					DebugConfig.log("queued level failed level=" + Variables.niveauSelectione + " error=" + exception);
+					throw exception;
+				}
+				catch(Error error){
+					DebugConfig.log("queued level failed level=" + Variables.niveauSelectione + " error=" + error);
+					throw error;
+				}
 			}
 		});
+	}
+
+	private void updateDebugAutoAdvance(float delta){
+		if(!DebugConfig.autoAdvanceLevels || Variables.levelComplete || gameCompleted || debugAutoAdvanceTriggered)
+			return;
+		debugAutoAdvanceElapsed += delta;
+		if(debugAutoAdvanceElapsed >= DebugConfig.autoAdvanceDelay){
+			debugAutoAdvanceTriggered = true;
+			DebugConfig.log("debug auto advance trigger level=" + Variables.niveauSelectione
+					+ " after=" + debugAutoAdvanceElapsed);
+			startLevelComplete();
+		}
 	}
 
 	private void drawGameCompleted(){

@@ -37,7 +37,7 @@ public class Plateforme {
 		etape = 1;
 
 		if(polylineObject.getProperties().get("Speed") != null)
-			vitesse = Float.parseFloat((String) polylineObject.getProperties().get("Speed"));
+			vitesse = Float.parseFloat(polylineObject.getProperties().get("Speed").toString());
 		else vitesse = 5;
 
 		if(polylineObject.getProperties().get("Loop") != null)
@@ -45,7 +45,7 @@ public class Plateforme {
 		else boucle = false;
 
 		if(polylineObject.getProperties().get("Width") != null)
-			largeur = Integer.parseInt((String) polylineObject.getProperties().get("Width"));
+			largeur = Float.parseFloat(polylineObject.getProperties().get("Width").toString());
 		else
 			largeur = 2;
 

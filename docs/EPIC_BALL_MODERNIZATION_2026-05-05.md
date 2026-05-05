@@ -75,6 +75,8 @@ Commands run successfully:
 ./gradlew :android:assembleDebug
 ./gradlew :html:dist
 ./gradlew :android:assembleDebug :desktop:compileJava :html:dist
+./gradlew :core:test :android:assembleDebug :desktop:compileJava :html:dist
+npm run test:web-transition
 ```
 
 Runtime checks:
@@ -84,6 +86,32 @@ Runtime checks:
 - Playwright/Chromium loaded the HTML menu without application errors.
 - HTML click-through reached gameplay and produced a gameplay screenshot.
 - Remaining browser warnings during screenshot capture were Chromium `ReadPixels` performance warnings caused by the screenshot operation itself.
+
+## Transition Stability Fix
+
+Updated on 2026-05-05 after reproducing the reported black screen after level 2.
+
+Root causes found:
+
+- Level 3 has no polygon geometry and relies on rectangular obstacles for visible level art. The obstacle draw ordering still checked old `com.gravity.ball.body.*` class-name strings, so plain rectangular obstacles were left out of the organized draw list on the migrated package names.
+- Some TMX properties are typed floats in Tiled. GWT exposes those as numeric values, while legacy constructors cast `Speed`/`Width` directly to `String`. That produced a WebGL-only `ClassCastException` while constructing level 3 objects.
+
+Fixes applied:
+
+- Replaced class-name string checks with `instanceof`/exact class checks in `LecteurCarte`.
+- Parsed typed TMX properties through `toString()` and float parsing in rotating obstacles and moving platforms.
+- Added `LevelProgression` unit coverage for next-level and transition timing behavior.
+- Added `LevelDataTest` coverage for all shipped TMX levels, including the level 3 rectangular-obstacle/no-polygon case.
+- Added a web-only debug bridge and Playwright transition test. The test starts at level 1, auto-completes levels 1 through 5, verifies each queued level activation, checks screenshots are not black after every transition, and verifies final completion.
+
+Latest transition validation:
+
+```bash
+./gradlew :core:test :html:dist
+npm run test:web-transition
+```
+
+The same transition check was also run against the deployed `https://ball.marcvidal.ca` bundle and returned `LIVE_TRANSITION_OK`.
 
 ## Deployment
 

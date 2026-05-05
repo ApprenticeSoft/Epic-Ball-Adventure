@@ -8,9 +8,11 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.PixmapIO;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.one.button.jam.MyGdxGame;
+import utils.DebugConfig;
 
 public class DesktopLauncher {
     public static void main(String[] arg) {
+        configureDebug();
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
         config.setTitle("Epic Ball Adventure");
         config.setWindowedMode(1024, 720);
@@ -41,5 +43,12 @@ public class DesktopLauncher {
                 }
             }
         }, config);
+    }
+
+    private static void configureDebug() {
+        DebugConfig.transitionLogs = Boolean.getBoolean("ball.debug");
+        DebugConfig.autoAdvanceLevels = Boolean.getBoolean("ball.autoAdvance");
+        DebugConfig.startLevel = Integer.getInteger("ball.startLevel", 1);
+        DebugConfig.autoAdvanceDelay = Float.parseFloat(System.getProperty("ball.autoAdvanceDelay", "0.35"));
     }
 }

@@ -2,6 +2,8 @@ package com.one.button.jam;
 
 import screen.LoadingScreen;
 import utils.Data;
+import utils.DebugConfig;
+import utils.Variables;
 
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Game;
@@ -19,6 +21,12 @@ public class MyGdxGame extends Game implements ApplicationListener {
 
 		batch = new SpriteBatch();
 		assets = new AssetManager();
+		if(DebugConfig.isEnabled()){
+			Variables.niveauSelectione = Math.max(1, DebugConfig.startLevel);
+			DebugConfig.log("game create startLevel=" + Variables.niveauSelectione
+					+ " autoAdvance=" + DebugConfig.autoAdvanceLevels
+					+ " delay=" + DebugConfig.autoAdvanceDelay);
+		}
 
 		this.setScreen(new LoadingScreen(this));
 	}
