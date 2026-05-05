@@ -12,22 +12,22 @@ import com.one.button.jam.Couleurs;
 public class Exit extends Obstacle{
 
 	float glowAlpha = 1;
-	
+
 	public Exit(World world, Camera camera, MapObject rectangleObject, Couleurs couleurs) {
 		super(world, camera, rectangleObject, couleurs);
 		body.setUserData("Exit");
 		body.getFixtureList().get(0).setSensor(true);
 		body.getFixtureList().get(0).setUserData("Exit");
-		
-		this.couleur = couleurs.getCouleurExit();	
+
+		this.couleur = couleurs.getCouleurExit();
 	}
-	
+
 
 	@Override
 	public void draw(SpriteBatch batch, TextureAtlas textureAtlas){
 		batch.setColor(couleur.r, couleur.g, couleur.b, 0.8f);
-		batch.draw(textureAtlas.findRegion("Exit_background"), 
-				this.body.getPosition().x - width, 
+		batch.draw(textureAtlas.findRegion("Exit_background"),
+				this.body.getPosition().x - width,
 				this.body.getPosition().y - height,
 				width,
 				height,
@@ -36,11 +36,11 @@ public class Exit extends Obstacle{
 				1,
 				1,
 				body.getAngle()*MathUtils.radiansToDegrees);
-		
+
 
 		batch.setColor(couleur.r, couleur.g, couleur.b, (float)(1 + Math.cos(glowAlpha += 4*Gdx.graphics.getDeltaTime()))/2);
-		batch.draw(textureAtlas.findRegion("Exit_glow"), 
-				this.body.getPosition().x - width * ((float)textureAtlas.findRegion("Exit_glow").getRegionWidth() / (float)textureAtlas.findRegion("Exit_background").getRegionWidth()), 
+		batch.draw(textureAtlas.findRegion("Exit_glow"),
+				this.body.getPosition().x - width * ((float)textureAtlas.findRegion("Exit_glow").getRegionWidth() / (float)textureAtlas.findRegion("Exit_background").getRegionWidth()),
 				this.body.getPosition().y - height * ((float)textureAtlas.findRegion("Exit_glow").getRegionWidth() / (float)textureAtlas.findRegion("Exit_background").getRegionWidth()),
 				width * ((float)textureAtlas.findRegion("Exit_glow").getRegionWidth() / (float)textureAtlas.findRegion("Exit_background").getRegionWidth()),
 				height * ((float)textureAtlas.findRegion("Exit_glow").getRegionWidth() / (float)textureAtlas.findRegion("Exit_background").getRegionWidth()),

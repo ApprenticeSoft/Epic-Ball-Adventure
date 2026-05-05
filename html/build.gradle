@@ -1,70 +1,118 @@
 apply plugin: "java"
-apply plugin: "jetty"
 
-gwt {
-    gwtVersion='2.6.0' // Should match the gwt version used for building the gwt backend
-    maxHeapSize="1G" // Default 256m is not enough for gwt compiler. GWT is HUNGRY
-    minHeapSize="1G"
-
-    src = files(file("src/")) // Needs to be in front of "modules" below.
-    modules 'com.one.button.jam.GdxDefinition'
-    devModules 'com.one.button.jam.GdxDefinitionSuperdev'
-    project.webAppDirName = 'webapp'
-
-    compiler {
-        strict = true;
-        enableClosureCompiler = true;
-        disableCastChecking = true;
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
-task draftRun(type: JettyRunWar) {
-    dependsOn draftWar
-    dependsOn.remove('war')
-    webApp=draftWar.archivePath
-    daemon=true
+sourceSets.main.java.srcDirs = ["src/"]
+
+configurations {
+    gwtCompiler
+    fontGenerator
 }
 
-task superDev(type: de.richsource.gradle.plugins.gwt.GwtSuperDev) {
-    dependsOn draftRun
-    doFirst {
-    	gwt.modules = gwt.devModules
-    }
+dependencies {
+    implementation project(":core")
+
+    implementation "com.badlogicgames.gdx:gdx-backend-gwt:$gdxVersion"
+    implementation "org.gwtproject:gwt-user:$gwtVersion"
+
+    implementation "com.badlogicgames.gdx:gdx:$gdxVersion:sources"
+    implementation "com.badlogicgames.gdx:gdx-backend-gwt:$gdxVersion:sources"
+    implementation "com.badlogicgames.gdx:gdx-box2d:$gdxVersion:sources"
+    implementation "com.badlogicgames.gdx:gdx-box2d-gwt:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-box2d-gwt:$gdxVersion:sources"
+    implementation "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-tools:$gdxVersion"
+    runtimeOnly "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    runtimeOnly "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
+
+    fontGenerator "com.badlogicgames.gdx:gdx:$gdxVersion"
+    fontGenerator "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+    fontGenerator "com.badlogicgames.gdx:gdx-tools:$gdxVersion"
+    fontGenerator "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    fontGenerator "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
+    gwtCompiler "org.gwtproject:gwt-dev:$gwtVersion"
 }
 
-task dist(dependsOn: [clean, compileGwt]) {
+tasks.register("generateWebFonts", JavaExec) {
+    group = "build"
+    description = "Generate high-density HTML bitmap fonts from the exact game TTF files"
+    dependsOn(classes)
+
+    mainClass = "com.one.button.jam.tools.WebFontAtlasGenerator"
+    jvmArgs = ["-Djava.awt.headless=true"]
+    classpath = files(sourceSets.main.output, configurations.fontGenerator)
+
+    args = [
+            "${projectDir}/../android/assets/Fonts/calibri.ttf",
+            "${projectDir}/../android/assets/Fonts/HARLOWSI.TTF",
+            "${projectDir}/../android/assets/Fonts",
+            "1024",
+            "4",
+            "4096"
+    ]
+}
+
+tasks.register("compileGwt", JavaExec) {
+    group = "build"
+    description = "Compile GWT application"
+    dependsOn(":core:classes", classes, "generateWebFonts")
+
+    mainClass = "com.google.gwt.dev.Compiler"
+    jvmArgs = ["-Xmx3G"]
+
+    classpath = files(
+            configurations.gwtCompiler,
+            sourceSets.main.runtimeClasspath,
+            file("src"),
+            file("../core/src")
+    )
+
+    args = [
+            "-war", "$buildDir/gwt/out",
+            "-style", "OBF",
+            "-logLevel", "WARN",
+            "-localWorkers", "1",
+            "com.one.button.jam.GdxDefinition"
+    ]
+}
+
+tasks.register("dist") {
+    group = "build"
+    description = "Build distributable HTML package"
+    dependsOn("compileGwt")
+
     doLast {
-        file("build/dist").mkdirs()
+        def distDir = file("$buildDir/dist")
+        delete distDir
+        distDir.mkdirs()
+
         copy {
-            from "build/gwt/out"
-            into "build/dist"
+            from "$buildDir/gwt/out"
+            into distDir
         }
+
         copy {
             from "webapp"
-            into "build/dist"
-            }
+            into distDir
+            exclude "WEB-INF/**"
+        }
+
         copy {
-            from "war"
-            into "build/dist"
+            from "war/assets"
+            into "$distDir/assets"
         }
     }
 }
 
-draftWar {
-   from "war"
-}
-
-task addSource << {
-	sourceSets.main.compileClasspath += files(project(':core').sourceSets.main.allJava.srcDirs)
-}
-
-tasks.compileGwt.dependsOn(addSource)
-tasks.draftCompileGwt.dependsOn(addSource)
-
-sourceCompatibility = 1.6
-sourceSets.main.java.srcDirs = [ "src/" ]
-
-
-eclipse.project {
-    name = appName + "-html"
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }

@@ -1,7 +1,7 @@
 
 Images.png
 format: RGBA8888
-filter: MipMapLinearNearest,MipMapLinearNearest
+filter: Linear,Linear
 repeat: none
 Ball
   rotate: false

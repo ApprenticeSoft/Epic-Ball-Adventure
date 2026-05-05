@@ -24,28 +24,28 @@ public class ObstacleBalance extends Obstacle{
 	private float angleRef = 0;
 	private float angleMin, angleMax;
 	private boolean limite = false;
-	
+
 	public ObstacleBalance(World world, Camera camera, MapObject rectangleObject, Couleurs couleurs) {
 		super(world, camera, rectangleObject, couleurs);
-		
+
 		//Couleur
-		couleur = couleurs.getCouleurLéger();
-		
+		couleur = couleurs.getCouleurLeger();
+
 		//Position du point d'attache
-		if(width >= height){		
+		if(width >= height){
 			if(rectangleObject.getProperties().get("Position") != null)
 				attacheX = width * Float.parseFloat(rectangleObject.getProperties().get("Position").toString());
 			else
 				attacheX = width;
 		}
-		else{	
+		else{
 			if(rectangleObject.getProperties().get("Position") != null)
 				attacheY = height * Float.parseFloat(rectangleObject.getProperties().get("Position").toString());
 			else
 				attacheY = height;
-		}	
-		
-		//Angles de référence, Min et Max
+		}
+
+		//Angles de rÃ©fÃ©rence, Min et Max
 		if(rectangleObject.getProperties().get("angleRef") != null){
 			angleRef = Float.parseFloat(rectangleObject.getProperties().get("angleRef").toString()) * MathUtils.degreesToRadians;
 			limite = true;
@@ -56,7 +56,7 @@ public class ObstacleBalance extends Obstacle{
 		}
 		if(rectangleObject.getProperties().get("angleMax") != null){
 			angleMax = Float.parseFloat(rectangleObject.getProperties().get("angleMax").toString()) * MathUtils.degreesToRadians;
-			limite = true;	
+			limite = true;
 		}
 		//Masse
 		if(rectangleObject.getProperties().get("Weight") != null){
@@ -71,7 +71,7 @@ public class ObstacleBalance extends Obstacle{
 			);
 			body.resetMassData();
 		}
-			
+
 		//Collision
 		if(rectangleObject.getProperties().get("Contact") != null)
 			if(rectangleObject.getProperties().get("Contact").toString().equals("oui"))
@@ -81,24 +81,24 @@ public class ObstacleBalance extends Obstacle{
 			speed = Float.parseFloat(rectangleObject.getProperties().get("Speed").toString());
 		if(rectangleObject.getProperties().get("Torque") != null)
 			torque = Float.parseFloat(rectangleObject.getProperties().get("Torque").toString());
-		
-		//Création du point d'attache
-		bodyDef.type = BodyType.StaticBody;	
+
+		//CrÃ©ation du point d'attache
+		bodyDef.type = BodyType.StaticBody;
 		bodyDef.position.x = bodyDef.position.x + attacheX;
 		bodyDef.position.y = bodyDef.position.y + attacheY;
-		
+
 		attacheShape = new PolygonShape();
-		attacheShape.setAsBox(0.1f, 0.1f); 	
+		attacheShape.setAsBox(0.1f, 0.1f);
 		fixtureDef.shape = attacheShape;
-        fixtureDef.density = 0.0f;  
-        fixtureDef.friction = 1.0f; 
-        fixtureDef.restitution = 0.0f; 
+        fixtureDef.density = 0.0f;
+        fixtureDef.friction = 1.0f;
+        fixtureDef.restitution = 0.0f;
         fixtureDef.isSensor = true;
-		
+
 		bodyAttache = world.createBody(bodyDef);
 		bodyAttache.createFixture(fixtureDef).setUserData("Attache");;
-		
-		//Création du joint
+
+		//CrÃ©ation du joint
 		RevoluteJointDef rjDef = new RevoluteJointDef();
 		rjDef.bodyA = body;
 		rjDef.bodyB = bodyAttache;
@@ -111,31 +111,31 @@ public class ObstacleBalance extends Obstacle{
 		rjDef.lowerAngle = angleMin;
 		rjDef.upperAngle = angleMax;
 		rjDef.referenceAngle = angleRef;
-		
+
 		revoluteJoint = (RevoluteJoint) world.createJoint(rjDef);
 		attacheShape.dispose();
-		
+
 		System.out.println("bodyAttache.getPosition() = " + bodyAttache.getPosition().toString());
 		System.out.println("body.getPosition() = " + body.getPosition().toString());
 
 		System.out.println("torque = " + torque);
 		System.out.println("speed = " + speed);
 	}
-	
+
 	@Override
 	public BodyType getBodyType(){
 		return BodyType.DynamicBody;
 	}
-	
+
 	@Override
 	public Color getCouleur(){
-		return couleurs.getCouleurLéger();
+		return couleurs.getCouleurLeger();
 	}
-	
+
 	@Override
 	public void actif(){
 	}
-	
+
 	@Override
 	public void initiate(){
 		body.setLinearVelocity(0, 0);

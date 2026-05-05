@@ -8,30 +8,30 @@ import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 
 public class OrthogonalTiledMapRendererWithSprites  extends OrthogonalTiledMapRenderer{
 	float unitScale = 1;
-	
+
 	public OrthogonalTiledMapRendererWithSprites(TiledMap map, Batch batch) {
 		super(map, batch);
 	}
 
 	public OrthogonalTiledMapRendererWithSprites (TiledMap map, float unitScale, Batch batch) {
 		super(map, unitScale, batch);
-		
+
 		this.unitScale = unitScale;
 	}
 
-	
-	//Permet d'afficher des objets que nous allons rajouter dans une couche "objet" de façon procédurale
+
+	//Permet d'afficher des objets que nous allons rajouter dans une couche "objet" de faÃ§on procÃ©durale
     @Override
     public void renderObject(MapObject object) {
         if(object instanceof TextureMapObject) {
             TextureMapObject textureObj = (TextureMapObject) object;
                 //batch.draw(textureObj.getTextureRegion(), textureObj.getX(), textureObj.getY());
-                batch.draw(textureObj.getTextureRegion(), 
-                			textureObj.getX(), 
-                			textureObj.getY(), 
-                			textureObj.getTextureRegion().getRegionWidth() * unitScale, 
-                			textureObj.getTextureRegion().getRegionHeight() * unitScale);
+                batch.draw(textureObj.getTextureRegion(),
+			textureObj.getX(),
+			textureObj.getY(),
+			textureObj.getTextureRegion().getRegionWidth() * unitScale,
+			textureObj.getTextureRegion().getRegionHeight() * unitScale);
         }
     }
-	
+
 }

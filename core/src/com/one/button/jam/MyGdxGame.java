@@ -11,15 +11,15 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 public class MyGdxGame extends Game implements ApplicationListener {
 	public SpriteBatch batch;
 	public AssetManager assets;
-	
+
 	@Override
 	public void create () {
 		//Data.Load();
 		//Data.setLevel(1);
-		
+
 		batch = new SpriteBatch();
 		assets = new AssetManager();
-		
+
 		this.setScreen(new LoadingScreen(this));
 	}
 
@@ -27,9 +27,14 @@ public class MyGdxGame extends Game implements ApplicationListener {
 	public void render () {
 		super.render();
 	}
-	
+
 	@Override
 	public void dispose () {
-
+		if(getScreen() != null)
+			getScreen().dispose();
+		if(batch != null)
+			batch.dispose();
+		if(assets != null)
+			assets.dispose();
 	}
 }
