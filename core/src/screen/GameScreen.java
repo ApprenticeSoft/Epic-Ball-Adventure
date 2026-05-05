@@ -12,6 +12,7 @@ import bodies.Obstacle;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputAdapter;
+import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.Application.ApplicationType;
 import com.badlogic.gdx.audio.Sound;
@@ -241,6 +242,7 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void show() {
+		Gdx.input.setInputProcessor(this);
 		world.setContactListener(new ContactListener(){
 			@Override
 			public void beginContact(Contact contact) {
@@ -466,7 +468,6 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	public void levelComplete(float delta){
 		if(gameCompleted){
-			drawGameplay();
 			drawGameCompleted();
 			return;
 		}
@@ -618,11 +619,42 @@ public class GameScreen extends InputAdapter implements Screen{
 	}
 
 	private void drawGameCompleted(){
+		Gdx.gl.glClearColor(0, 0, 0, 1);
+		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		labelRestart.setText("Game Complete !\nThanks for playing !");
 		labelRestartOmbre.setText("Game Complete !\nThanks for playing !");
 		layoutRestartLabels();
 		stage.act();
 		stage.draw();
+	}
+
+	@Override
+	public boolean keyDown(int keycode) {
+		if(gameCompleted && keycode == Keys.SPACE){
+			returnToMainMenu();
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+		if(gameCompleted){
+			returnToMainMenu();
+			return true;
+		}
+		return false;
+	}
+
+	private void returnToMainMenu(){
+		DebugConfig.log("return to main menu after game complete");
+		DebugConfig.autoAdvanceLevels = false;
+		Variables.niveauSelectione = 1;
+		Variables.levelComplete = false;
+		Variables.restart = false;
+		Variables.fallRestartDelay = 2.136f;
+		game.setScreen(new MainMenuScreen(game));
+		dispose();
 	}
 
 	private void layoutRestartLabels(){

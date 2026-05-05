@@ -113,6 +113,13 @@ npm run test:web-transition
 
 The same transition check was also run against the deployed `https://ball.marcvidal.ca` bundle and returned `LIVE_TRANSITION_OK`.
 
+Final-completion behavior update:
+
+- After level 5 completes, the closing vignette resolves to a black completion screen.
+- `Game Complete !` / `Thanks for playing !` is displayed over the black screen.
+- Pressing `Space` on keyboard or touching the screen on mobile returns to the main menu.
+- The main-menu start logic is event-driven so the same `Space` press used to return home cannot immediately start a new game.
+
 ## Deployment
 
 Completed on 2026-05-05.

@@ -96,7 +96,7 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 		labelStart.draw(game.batch, (1 + MathUtils.cos(startAlpha += 7*Gdx.graphics.getDeltaTime()))/2);
 		game.batch.end();
 
-		if(startRequested || Gdx.input.isKeyPressed(Keys.F) || Gdx.input.isKeyPressed(Keys.SPACE)){
+		if(startRequested){
 			game.setScreen(new GameScreen(game));
 			dispose();
 		}
