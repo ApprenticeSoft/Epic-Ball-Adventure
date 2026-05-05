@@ -47,6 +47,7 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	private static final float MAX_FRAME_DELTA = 0.25f;
 	private static final int MAX_PHYSICS_STEPS = 5;
+	private static final float LEVEL_TRANSITION_DURATION = 1.35f;
 
 	final MyGdxGame game;
 	private MyCamera camera;
@@ -82,6 +83,8 @@ public class GameScreen extends InputAdapter implements Screen{
     TextureRegion fboRegion;
     private int fboWidth, fboHeight;
     private float physicsAccumulator;
+    private float transitionElapsed;
+    private float transitionStartRadius;
     private boolean transitionInitialized;
     private boolean nextLevelQueued;
     private boolean gameCompleted;
@@ -161,11 +164,12 @@ public class GameScreen extends InputAdapter implements Screen{
 	shaderProgram = new ShaderProgram(vertexShader,fragmentShader);
 	//game.batch.setShader(shaderProgram);
 
-	shaderProgram.begin();
-	shaderProgram.setUniformf("u_resolution", Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-	shaderProgram.setUniformf("u_PosX", posX);
-	shaderProgram.setUniformf("u_PosY", posY);
-	shaderProgram.end();
+	if(shaderProgram.isCompiled()){
+		shaderProgram.begin();
+		shaderProgram.setUniformf("u_resolution", Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+		shaderProgram.setUniformf("u_center", posX, posY);
+		shaderProgram.end();
+	}
 
 	resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 	}
@@ -349,7 +353,11 @@ public class GameScreen extends InputAdapter implements Screen{
 			stage.getViewport().update(width, height, true);
 			layoutRestartLabels();
         }
-        resizeFrameBuffer(width, height);
+        resizeFrameBuffer(Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+        if(transitionInitialized){
+			transitionStartRadius = getBackBufferDiagonal();
+			updateVignetteState();
+        }
 	}
 
 	@Override
@@ -438,32 +446,16 @@ public class GameScreen extends InputAdapter implements Screen{
 		}
 
 		initializeLevelTransition();
-		outerRadius -= 18 * delta;
-		innerRadius -= 18 * delta;
 
-		if(shaderProgram != null && shaderProgram.isCompiled()){
-			float resolutionX = fboWidth > 0 ? fboWidth : Gdx.graphics.getWidth();
-			float resolutionY = fboHeight > 0 ? fboHeight : Gdx.graphics.getHeight();
-			camera.project(projectedBallPosition.set(lecteurCarte.balle.getX(),lecteurCarte.balle.getY(),0));
-			posX = projectedBallPosition.x / resolutionX;
-	        posY = projectedBallPosition.y / resolutionY;
-
-			shaderProgram.begin();
-	        shaderProgram.setUniformf("u_PosX", posX);
-	        shaderProgram.setUniformf("u_PosY", posY);
-	        shaderProgram.setUniformf("outerRadius", outerRadius);
-	        shaderProgram.setUniformf("innerRadius", innerRadius);
-	        shaderProgram.end();
-		}
-
+		transitionElapsed += delta;
+		updateVignetteState();
 		renderTransitionFrame();
 
-        if(outerRadius < 0){
+		if(transitionElapsed >= LEVEL_TRANSITION_DURATION){
 	if(Variables.niveauSelectione < Variables.nombreNiveaux)
 		queueNextLevel();
 	else{
 		gameCompleted = true;
-		drawGameplay();
 		drawGameCompleted();
 	}
         }
@@ -483,10 +475,37 @@ public class GameScreen extends InputAdapter implements Screen{
 			return;
 		transitionInitialized = true;
 		physicsAccumulator = 0;
+		transitionElapsed = 0;
+		transitionStartRadius = getBackBufferDiagonal();
+		outerRadius = transitionStartRadius;
+		innerRadius = Math.max(0, outerRadius - getVignetteFeather());
 		lecteurCarte.balle.body.getFixtureList().get(0).setSensor(true);
 		transitionVelocity.set(lecteurCarte.exit.body.getPosition()).sub(lecteurCarte.balle.body.getPosition());
 		lecteurCarte.balle.body.setLinearVelocity(transitionVelocity);
 		lecteurCarte.balle.body.setAngularVelocity(1f);
+	}
+
+	private void updateVignetteState(){
+		float progress = Math.min(transitionElapsed / LEVEL_TRANSITION_DURATION, 1f);
+		outerRadius = Math.max(1f, transitionStartRadius * (1f - progress));
+		innerRadius = Math.max(0, outerRadius - getVignetteFeather());
+
+		if(shaderProgram == null || !shaderProgram.isCompiled())
+			return;
+
+		int resolutionX = getBackBufferWidth();
+		int resolutionY = getBackBufferHeight();
+		camera.project(projectedBallPosition.set(lecteurCarte.balle.getX(),lecteurCarte.balle.getY(),0),
+				0, 0, resolutionX, resolutionY);
+		posX = projectedBallPosition.x;
+		posY = projectedBallPosition.y;
+
+		shaderProgram.begin();
+		shaderProgram.setUniformf("u_resolution", resolutionX, resolutionY);
+		shaderProgram.setUniformf("u_center", posX, posY);
+		shaderProgram.setUniformf("outerRadius", outerRadius);
+		shaderProgram.setUniformf("innerRadius", innerRadius);
+		shaderProgram.end();
 	}
 
 	private void renderTransitionFrame(){
@@ -546,7 +565,27 @@ public class GameScreen extends InputAdapter implements Screen{
 				labelRestart.getY() - Gdx.graphics.getWidth()/380f);
 	}
 
+	private int getBackBufferWidth(){
+		return Math.max(1, Gdx.graphics.getBackBufferWidth());
+	}
+
+	private int getBackBufferHeight(){
+		return Math.max(1, Gdx.graphics.getBackBufferHeight());
+	}
+
+	private float getBackBufferDiagonal(){
+		float width = getBackBufferWidth();
+		float height = getBackBufferHeight();
+		return (float)Math.sqrt(width * width + height * height);
+	}
+
+	private float getVignetteFeather(){
+		return Math.max(48f, Math.min(getBackBufferWidth(), getBackBufferHeight()) * 0.08f);
+	}
+
 	private void resizeFrameBuffer(int width, int height){
+		width = Math.max(1, width);
+		height = Math.max(1, height);
 		if(fbo != null && fboWidth == width && fboHeight == height){
 			updateShaderResolution();
 			return;
@@ -575,8 +614,8 @@ public class GameScreen extends InputAdapter implements Screen{
 	private void updateShaderResolution(){
 		if(shaderProgram == null || !shaderProgram.isCompiled())
 			return;
-		float resolutionX = fboWidth > 0 ? fboWidth : Gdx.graphics.getWidth();
-		float resolutionY = fboHeight > 0 ? fboHeight : Gdx.graphics.getHeight();
+		float resolutionX = fboWidth > 0 ? fboWidth : getBackBufferWidth();
+		float resolutionY = fboHeight > 0 ? fboHeight : getBackBufferHeight();
 		shaderProgram.begin();
 		shaderProgram.setUniformf("u_resolution", resolutionX, resolutionY);
 		shaderProgram.end();

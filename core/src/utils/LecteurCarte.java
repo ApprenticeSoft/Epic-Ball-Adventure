@@ -238,14 +238,14 @@ public class LecteurCarte {
 
 	public void drawPolygone(PolygonSpriteBatch batch, MyCamera camera){
         for(Polygone polygone : polygones){
-	polygone.setPos(cameraOrigineX - camera.position.x, cameraOrigineY - camera.position.y);
+	polygone.setPos(0, 0);
 	polygone.draw(batch, couleurs);
         }
 	}
 
 	public void drawPolygoneOmbre(PolygonSpriteBatch batch, MyCamera camera){
         for(Polygone polygone : polygones){
-	polygone.setPos(cameraOrigineX - camera.position.x + Variables.ombresX, cameraOrigineY - camera.position.y + Variables.ombresY);
+	polygone.setPos(Variables.ombresX, Variables.ombresY);
 	polygone.draw(batch, couleurs);
         }
 	}
