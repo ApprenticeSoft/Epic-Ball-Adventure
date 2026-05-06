@@ -95,6 +95,8 @@ test('responsive UI elements fit portrait and landscape screens', async ({ page 
     expect(Math.abs(startCenterY - expectedStartCenterY)).toBeLessThanOrEqual(Math.max(3, menuLayout.screen.height * 0.03));
 
     await startGame(page, testInfo.project.name);
+    await waitForDebugEvent(page, logs, 'game camera layout', 10000);
+    const initialCameraLayout = parseCameraLayoutEvent(await latestDebugEvent(page, 'game camera layout'));
     await waitForDebugEvent(page, logs, 'restart label layout', 10000);
     const portraitRestartLayout = parseLayoutEvent(await latestDebugEvent(page, 'restart label layout'));
     assertBoundsFit(portraitRestartLayout.screen, portraitRestartLayout.bounds);
@@ -103,6 +105,11 @@ test('responsive UI elements fit portrait and landscape screens', async ({ page 
     const viewport = page.viewportSize();
     await page.setViewportSize({ width: viewport.height, height: viewport.width });
     await waitForRestartScreenChange(page, portraitRestartLayout.screen, 10000);
+    const rotatedCameraLayout = parseCameraLayoutEvent(await latestDebugEvent(page, 'game camera layout'));
+    if(testInfo.project.name.includes('mobile')){
+      const zoomRatio = rotatedCameraLayout.pixelsPerWorld / initialCameraLayout.pixelsPerWorld;
+      expect(Math.abs(zoomRatio - 1)).toBeLessThanOrEqual(0.04);
+    }
     const landscapeRestartLayout = parseLayoutEvent(await latestDebugEvent(page, 'restart label layout'));
     assertBoundsFit(landscapeRestartLayout.screen, landscapeRestartLayout.bounds);
     assertCentered(landscapeRestartLayout.screen, landscapeRestartLayout.bounds, 3);
@@ -212,6 +219,18 @@ function parseMenuLayoutEvent(event) {
       width: Number(match[10]),
       height: Number(match[11])
     }
+  };
+}
+
+function parseCameraLayoutEvent(event) {
+  const match = event.match(/screen=([\d.]+)x([\d.]+) viewport=([\d.-]+)x([\d.-]+) pixelsPerWorld=([\d.-]+) mobile=(true|false)/);
+  if(!match)
+    throw new Error(`Cannot parse camera layout event: ${event}`);
+  return {
+    screen: { width: Number(match[1]), height: Number(match[2]) },
+    viewport: { width: Number(match[3]), height: Number(match[4]) },
+    pixelsPerWorld: Number(match[5]),
+    mobile: match[6] === 'true'
   };
 }
 

@@ -6,6 +6,7 @@ import utils.LecteurCarte;
 import utils.LevelProgression;
 import utils.MyCamera;
 import utils.OrthogonalTiledMapRendererWithSprites;
+import utils.PlatformInfo;
 import utils.Variables;
 import bodies.Eau;
 import bodies.Obstacle;
@@ -52,6 +53,7 @@ public class GameScreen extends InputAdapter implements Screen{
 	private static final float MAX_FRAME_DELTA = 0.25f;
 	private static final int MAX_PHYSICS_STEPS = 5;
 	private static final float LEVEL_TRANSITION_DURATION = 1.35f;
+	private static final float MOBILE_CAMERA_SHORT_SIDE_WORLD = 56f;
 
 	final MyGdxGame game;
 	private MyCamera camera;
@@ -97,6 +99,7 @@ public class GameScreen extends InputAdapter implements Screen{
     private boolean debugAutoAdvanceTriggered;
     private float debugAutoAdvanceElapsed;
     private String lastRestartLayoutLog;
+    private String lastCameraLayoutLog;
     private final Vector2 transitionVelocity = new Vector2();
     private final Vector3 projectedBallPosition = new Vector3();
 
@@ -119,7 +122,7 @@ public class GameScreen extends InputAdapter implements Screen{
 		ratio = (float)Gdx.graphics.getHeight()/(float)Gdx.graphics.getWidth();
 
 		camera = new MyCamera();
-		camera.setToOrtho(false, dimension * Variables.WORLD_TO_BOX, dimension * Variables.WORLD_TO_BOX * ratio);
+		updateGameplayCameraViewport(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         camera.update();
 
         polyBatch = new PolygonSpriteBatch();
@@ -371,7 +374,7 @@ public class GameScreen extends InputAdapter implements Screen{
 		width = Math.max(1, width);
 		height = Math.max(1, height);
 		ratio = (float)height/(float)width;
-		camera.setToOrtho(false, dimension * Variables.WORLD_TO_BOX, dimension * Variables.WORLD_TO_BOX * ratio);
+		updateGameplayCameraViewport(width, height);
 		if(lecteurCarte != null && tiledMap != null)
 			camera.mouvement(lecteurCarte.balle, tiledMap, 0);
         camera.update();
@@ -458,6 +461,45 @@ public class GameScreen extends InputAdapter implements Screen{
 		polyBatch.begin();
 		lecteurCarte.drawPolygone(polyBatch, camera);
 		polyBatch.end();
+	}
+
+	private void updateGameplayCameraViewport(int screenWidth, int screenHeight){
+		float viewportWidth;
+		float viewportHeight;
+		if(usesMobileCameraViewport()){
+			float aspect = (float)screenWidth / (float)screenHeight;
+			if(screenWidth <= screenHeight){
+				viewportWidth = MOBILE_CAMERA_SHORT_SIDE_WORLD;
+				viewportHeight = MOBILE_CAMERA_SHORT_SIDE_WORLD / aspect;
+			}
+			else{
+				viewportHeight = MOBILE_CAMERA_SHORT_SIDE_WORLD;
+				viewportWidth = MOBILE_CAMERA_SHORT_SIDE_WORLD * aspect;
+			}
+		}
+		else{
+			viewportWidth = dimension * Variables.WORLD_TO_BOX;
+			viewportHeight = viewportWidth * ((float)screenHeight / (float)screenWidth);
+		}
+
+		camera.setToOrtho(false, viewportWidth, viewportHeight);
+		logCameraLayout(screenWidth, screenHeight);
+	}
+
+	private boolean usesMobileCameraViewport(){
+		return Gdx.app.getType() == ApplicationType.Android || PlatformInfo.mobileBrowser;
+	}
+
+	private void logCameraLayout(int screenWidth, int screenHeight){
+		float pixelsPerWorld = Math.min(screenWidth / camera.viewportWidth, screenHeight / camera.viewportHeight);
+		String layoutLog = "game camera layout screen=" + screenWidth + "x" + screenHeight
+				+ " viewport=" + camera.viewportWidth + "x" + camera.viewportHeight
+				+ " pixelsPerWorld=" + pixelsPerWorld
+				+ " mobile=" + usesMobileCameraViewport();
+		if(!layoutLog.equals(lastCameraLayoutLog)){
+			lastCameraLayoutLog = layoutLog;
+			DebugConfig.log(layoutLog);
+		}
 	}
 
 	private void startLevelComplete(){
