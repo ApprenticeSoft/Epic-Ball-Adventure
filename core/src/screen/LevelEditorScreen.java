@@ -19,10 +19,12 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.Texture.TextureFilter;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
@@ -48,14 +50,39 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private static final float RIGHT_PANEL_WIDTH = 230f;
 	private static final float MIN_ZOOM = 0.12f;
 	private static final float MAX_ZOOM = 4f;
+	private static final float EDITOR_FONT_GENERATED_SIZE = 158f;
+	private static final float EDITOR_FONT_PIXEL_SIZE = 15f;
+	private static final float EDITOR_FONT_SCALE = EDITOR_FONT_PIXEL_SIZE / EDITOR_FONT_GENERATED_SIZE;
+	private static final float TITLE_FONT_SCALE = 1.12f;
+	private static final float BUTTON_HEIGHT = 28f;
+	private static final float FIELD_HEIGHT = 28f;
+	private static final int GRID_MINOR_STEP = EditorLevel.TILE_SIZE;
+	private static final int GRID_MAJOR_STEP = EditorLevel.TILE_SIZE * 4;
+	private static final Color COLOR_BACKGROUND = new Color(0.08f, 0.09f, 0.10f, 1f);
+	private static final Color COLOR_WORLD_BACKGROUND = new Color(0.10f, 0.11f, 0.12f, 1f);
+	private static final Color COLOR_LEVEL_BACKGROUND = new Color(0.13f, 0.14f, 0.15f, 1f);
+	private static final Color COLOR_GRID_MINOR = new Color(0.20f, 0.22f, 0.24f, 0.50f);
+	private static final Color COLOR_GRID_MAJOR = new Color(0.28f, 0.31f, 0.34f, 0.70f);
+	private static final Color COLOR_LEVEL_BORDER = new Color(0.46f, 0.55f, 0.60f, 1f);
+	private static final Color COLOR_SELECTED = new Color(1f, 0.88f, 0.18f, 1f);
+	private static final Color COLOR_OUTLINE = new Color(0f, 0f, 0f, 0.65f);
+	private static final Color COLOR_START = new Color(0.95f, 0.95f, 0.95f, 1f);
+	private static final Color COLOR_EXIT = new Color(0.20f, 0.70f, 1f, 1f);
+	private static final Color COLOR_WATER = new Color(0.16f, 0.45f, 0.82f, 0.68f);
+	private static final Color COLOR_DYNAMIC = new Color(0.89f, 0.55f, 0.24f, 0.95f);
+	private static final Color COLOR_SPRING = new Color(0.25f, 0.82f, 0.42f, 0.95f);
+	private static final Color COLOR_POLYGON = new Color(0.64f, 0.63f, 0.67f, 0.95f);
+	private static final Color COLOR_SOLID = new Color(0.72f, 0.74f, 0.78f, 0.95f);
 
 	private final MyGdxGame game;
 	private final EditorLevel level = new EditorLevel();
 	private final OrthographicCamera uiCamera = new OrthographicCamera();
+	private final OrthographicCamera worldCamera = new OrthographicCamera();
 	private final ShapeRenderer shapes = new ShapeRenderer();
 	private final Stage stage = new Stage(new ScreenViewport());
 	private final Vector2 scratch = new Vector2();
 	private final Vector2 scratch2 = new Vector2();
+	private final Rectangle visibleWorldBounds = new Rectangle();
 
 	private Texture uiTexture;
 	private Drawable panelDrawable;
@@ -68,7 +95,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private Label.LabelStyle titleStyle;
 	private TextButton.TextButtonStyle buttonStyle;
 	private TextField.TextFieldStyle textFieldStyle;
-	private BitmapFont font;
+	private BitmapFont editorFont;
 
 	private Table leftTable;
 	private Table rightTable;
@@ -88,11 +115,14 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private float dragOffsetX;
 	private float dragOffsetY;
 	private EditorLevelObject selectedObject;
+	private EditorLevelObject hoveredObject;
 	private EditorObjectType activePaletteType;
+	private String lastLayoutLog;
+	private String lastCameraLog;
 
 	public LevelEditorScreen(final MyGdxGame game){
 		this.game = game;
-		font = game.assets.get("font1.ttf", BitmapFont.class);
+		editorFont = createEditorFont();
 		createStyles();
 		buildUi();
 		resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
@@ -101,13 +131,15 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public void show() {
+		Gdx.graphics.setContinuousRendering(true);
 		Gdx.input.setInputProcessor(new InputMultiplexer(stage, this));
 	}
 
 	@Override
 	public void render(float delta) {
 		updateCamera(delta);
-		Gdx.gl.glClearColor(0.08f, 0.09f, 0.10f, 1f);
+		updateHover();
+		Gdx.gl.glClearColor(COLOR_BACKGROUND.r, COLOR_BACKGROUND.g, COLOR_BACKGROUND.b, COLOR_BACKGROUND.a);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		drawWorld();
 		stage.act(delta);
@@ -121,6 +153,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		uiCamera.setToOrtho(false, width, height);
 		uiCamera.update();
 		stage.getViewport().update(width, height, true);
+		updateWorldCamera();
+		logLayout(width, height);
 	}
 
 	@Override
@@ -196,13 +230,15 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			activePaletteType = null;
 			return true;
 		}
+		EditorLevelObject previousSelection = selectedObject;
 		selectedObject = level.findAt(world.x, world.y);
 		draggingObject = selectedObject != null;
 		if(selectedObject != null){
 			dragOffsetX = world.x - selectedObject.x;
 			dragOffsetY = world.y - selectedObject.y;
 		}
-		buildLeftPanel();
+		if(previousSelection != selectedObject)
+			buildLeftPanel();
 		return true;
 	}
 
@@ -221,9 +257,17 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(draggingObject){
 			draggingObject = false;
 			buildLeftPanel();
+			logCamera();
 			return true;
 		}
 		return false;
+	}
+
+	@Override
+	public boolean mouseMoved(int screenX, int screenY) {
+		EditorLevelObject previousHover = hoveredObject;
+		updateHover(screenX, screenY);
+		return previousHover != hoveredObject;
 	}
 
 	@Override
@@ -242,8 +286,19 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	public void dispose() {
 		stage.dispose();
 		shapes.dispose();
+		if(editorFont != null)
+			editorFont.dispose();
 		if(uiTexture != null)
 			uiTexture.dispose();
+	}
+
+	private BitmapFont createEditorFont(){
+		BitmapFont font = new BitmapFont(Gdx.files.internal("Fonts/web_font1_hd.fnt"), false);
+		font.getData().setScale(EDITOR_FONT_SCALE);
+		font.setUseIntegerPositions(false);
+		for(TextureRegion region : font.getRegions())
+			region.getTexture().setFilter(TextureFilter.Linear, TextureFilter.Linear);
+		return font;
 	}
 
 	private void createStyles(){
@@ -260,11 +315,11 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		cursorDrawable = tint(white, new Color(0.95f, 0.95f, 0.95f, 1f));
 		selectionDrawable = tint(white, new Color(0.13f, 0.55f, 0.72f, 0.65f));
 
-		labelStyle = new Label.LabelStyle(font, new Color(0.90f, 0.93f, 0.95f, 1f));
-		titleStyle = new Label.LabelStyle(font, new Color(1f, 0.86f, 0.22f, 1f));
+		labelStyle = new Label.LabelStyle(editorFont, new Color(0.90f, 0.93f, 0.95f, 1f));
+		titleStyle = new Label.LabelStyle(editorFont, new Color(1f, 0.86f, 0.22f, 1f));
 
 		buttonStyle = new TextButton.TextButtonStyle();
-		buttonStyle.font = font;
+		buttonStyle.font = editorFont;
 		buttonStyle.fontColor = Color.WHITE;
 		buttonStyle.downFontColor = Color.WHITE;
 		buttonStyle.up = buttonDrawable;
@@ -272,7 +327,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		buttonStyle.checked = buttonDownDrawable;
 
 		textFieldStyle = new TextField.TextFieldStyle();
-		textFieldStyle.font = font;
+		textFieldStyle.font = editorFont;
 		textFieldStyle.fontColor = Color.WHITE;
 		textFieldStyle.cursor = cursorDrawable;
 		textFieldStyle.selection = selectionDrawable;
@@ -291,11 +346,13 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 		leftTable = new Table();
 		leftTable.setBackground(panelDrawable);
+		leftTable.top();
 		ScrollPane leftScroll = new ScrollPane(leftTable);
 		leftScroll.setFadeScrollBars(false);
 
 		rightTable = new Table();
 		rightTable.setBackground(panelDrawable);
+		rightTable.top();
 		ScrollPane rightScroll = new ScrollPane(rightTable);
 		rightScroll.setFadeScrollBars(false);
 
@@ -311,7 +368,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(leftTable == null)
 			return;
 		leftTable.clear();
-		leftTable.defaults().pad(4).left().growX();
+		leftTable.defaults().pad(2f).left().growX();
 		addTitle(leftTable, "LEVEL");
 		fileNameField = addTextField(leftTable, "File", level.fileName, new TextSetter() {
 			@Override
@@ -433,7 +490,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private void buildRightPanel(){
 		rightTable.clear();
-		rightTable.defaults().pad(4).left().growX();
+		rightTable.defaults().pad(2f).left().growX();
 		addTitle(rightTable, "OBJECTS");
 		addPaletteButton(EditorObjectType.START, "Start");
 		addPaletteButton(EditorObjectType.SOLID, "Solid");
@@ -477,21 +534,25 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private void addTitle(Table table, String text){
 		Label label = new Label(text, titleStyle);
+		label.setFontScale(EDITOR_FONT_SCALE * TITLE_FONT_SCALE);
 		label.setAlignment(Align.left);
-		table.add(label).growX();
+		table.add(label).height(30f).growX();
 		table.row();
 	}
 
 	private TextButton addButton(Table table, String text){
 		TextButton button = new TextButton(text, buttonStyle);
-		table.add(button).height(34f).growX();
+		button.getLabel().setFontScale(EDITOR_FONT_SCALE);
+		button.getLabel().setEllipsis(true);
+		table.add(button).height(BUTTON_HEIGHT).growX();
 		table.row();
 		return button;
 	}
 
 	private TextField addTextField(Table table, String labelText, String value, final TextSetter setter){
 		Label label = new Label(labelText, labelStyle);
-		table.add(label).growX();
+		label.setFontScale(EDITOR_FONT_SCALE * 0.92f);
+		table.add(label).height(20f).growX();
 		table.row();
 		final TextField field = new TextField(value == null ? "" : value, textFieldStyle);
 		field.addListener(new ChangeListener() {
@@ -500,7 +561,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 				setter.set(field.getText());
 			}
 		});
-		table.add(field).height(32f).growX();
+		table.add(field).height(FIELD_HEIGHT).growX();
 		table.row();
 		return field;
 	}
@@ -599,6 +660,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	}
 
 	private void updateCamera(float delta){
+		boolean cameraMoved = panLeft || panRight || panUp || panDown;
 		float speed = 900f * delta / zoom;
 		if(panLeft)
 			cameraX -= speed;
@@ -608,65 +670,75 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			cameraY += speed;
 		if(panDown)
 			cameraY -= speed;
+		updateWorldCamera();
+		if(cameraMoved)
+			logCamera();
 	}
 
 	private void zoomAtScreen(int screenX, int screenY, float factor){
 		Vector2 before = screenToWorld(screenX, screenY, scratch);
 		zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
+		updateWorldCamera();
 		Vector2 after = screenToWorld(screenX, screenY, scratch2);
 		cameraX += before.x - after.x;
 		cameraY += before.y - after.y;
+		updateWorldCamera();
+		logCamera();
 	}
 
 	private void drawWorld(){
-		float width = Gdx.graphics.getWidth();
-		float height = Gdx.graphics.getHeight();
-		float worldLeft = LEFT_PANEL_WIDTH;
-		float worldRight = width - RIGHT_PANEL_WIDTH;
+		int viewportX = Math.round(LEFT_PANEL_WIDTH);
+		int viewportY = 0;
+		int viewportWidth = Math.max(1, Math.round(getWorldScreenWidth()));
+		int viewportHeight = Math.max(1, Gdx.graphics.getHeight());
 
 		shapes.setProjectionMatrix(uiCamera.combined);
 		Gdx.gl.glEnable(GL20.GL_BLEND);
 		shapes.begin(ShapeRenderer.ShapeType.Filled);
-		shapes.setColor(0.08f, 0.09f, 0.10f, 1f);
-		shapes.rect(worldLeft, 0, worldRight - worldLeft, height);
-		shapes.setColor(0.10f, 0.11f, 0.12f, 1f);
-		shapes.rect(worldXToScreen(0), worldYToScreen(0), level.getPixelWidth() * zoom, level.getPixelHeight() * zoom);
+		shapes.setColor(COLOR_WORLD_BACKGROUND);
+		shapes.rect(LEFT_PANEL_WIDTH, 0, viewportWidth, viewportHeight);
+		shapes.end();
+
+		Gdx.gl.glViewport(viewportX, viewportY, viewportWidth, viewportHeight);
+		shapes.setProjectionMatrix(worldCamera.combined);
+		shapes.begin(ShapeRenderer.ShapeType.Filled);
+		shapes.setColor(COLOR_LEVEL_BACKGROUND);
+		shapes.rect(0, 0, level.getPixelWidth(), level.getPixelHeight());
 		for(EditorLevelObject object : level.objects)
-			drawObjectFilled(object);
+			if(isVisible(object))
+				drawObjectFilled(object);
 		drawPlacementGhost();
 		shapes.end();
 
 		shapes.begin(ShapeRenderer.ShapeType.Line);
 		drawGrid();
-		shapes.setColor(0.46f, 0.55f, 0.60f, 1f);
-		shapes.rect(worldXToScreen(0), worldYToScreen(0), level.getPixelWidth() * zoom, level.getPixelHeight() * zoom);
+		shapes.setColor(COLOR_LEVEL_BORDER);
+		shapes.rect(0, 0, level.getPixelWidth(), level.getPixelHeight());
 		for(EditorLevelObject object : level.objects)
-			drawObjectOutline(object, object == selectedObject);
+			if(isVisible(object))
+				drawObjectOutline(object, object == selectedObject);
 		shapes.end();
 		Gdx.gl.glDisable(GL20.GL_BLEND);
 
+		Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		drawObjectLabels();
 	}
 
 	private void drawGrid(){
-		float width = Gdx.graphics.getWidth();
-		float height = Gdx.graphics.getHeight();
-		float worldRight = width - RIGHT_PANEL_WIDTH;
-		float step = EditorLevel.TILE_SIZE * zoom;
+		float step = GRID_MINOR_STEP * zoom;
 		if(step < 5f)
 			return;
-		shapes.setColor(0.20f, 0.22f, 0.24f, 0.65f);
-		float startX = (float)Math.floor(cameraX / EditorLevel.TILE_SIZE) * EditorLevel.TILE_SIZE;
-		float endX = cameraX + (worldRight - LEFT_PANEL_WIDTH) / zoom;
-		for(float wx = startX; wx <= endX; wx += EditorLevel.TILE_SIZE){
-			float sx = worldXToScreen(wx);
-			shapes.line(sx, 0, sx, height);
+		float startX = (float)Math.floor(visibleWorldBounds.x / GRID_MINOR_STEP) * GRID_MINOR_STEP;
+		float endX = visibleWorldBounds.x + visibleWorldBounds.width;
+		float startY = (float)Math.floor(visibleWorldBounds.y / GRID_MINOR_STEP) * GRID_MINOR_STEP;
+		float endY = visibleWorldBounds.y + visibleWorldBounds.height;
+		for(float wx = startX; wx <= endX; wx += GRID_MINOR_STEP){
+			shapes.setColor(((int)wx) % GRID_MAJOR_STEP == 0 ? COLOR_GRID_MAJOR : COLOR_GRID_MINOR);
+			shapes.line(wx, visibleWorldBounds.y, wx, endY);
 		}
-		float startY = (float)Math.floor(cameraY / EditorLevel.TILE_SIZE) * EditorLevel.TILE_SIZE;
-		float endY = cameraY + height / zoom;
-		for(float wy = startY; wy <= endY; wy += EditorLevel.TILE_SIZE){
-			float sy = worldYToScreen(wy);
-			shapes.line(LEFT_PANEL_WIDTH, sy, worldRight, sy);
+		for(float wy = startY; wy <= endY; wy += GRID_MINOR_STEP){
+			shapes.setColor(((int)wy) % GRID_MAJOR_STEP == 0 ? COLOR_GRID_MAJOR : COLOR_GRID_MINOR);
+			shapes.line(visibleWorldBounds.x, wy, endX, wy);
 		}
 	}
 
@@ -674,52 +746,38 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		Color color = objectColor(object.type);
 		shapes.setColor(color);
 		if(object.type == EditorObjectType.START){
-			float radius = Math.max(5f, object.width * zoom / 2f);
-			shapes.circle(worldXToScreen(object.x + object.width / 2f), worldYToScreen(object.y + object.height / 2f), radius, 28);
+			shapes.circle(object.x + object.width / 2f, object.y + object.height / 2f, object.width / 2f, 20);
 		}
 		else if(object.type == EditorObjectType.POLYGON){
-			float sx = worldXToScreen(object.x);
-			float sy = worldYToScreen(object.y);
-			float sw = object.width * zoom;
-			float sh = object.height * zoom;
-			shapes.triangle(sx, sy + sh, sx + sw, sy + sh, sx + sw, sy);
+			shapes.triangle(object.x, object.y + object.height, object.x + object.width, object.y + object.height,
+					object.x + object.width, object.y);
 		}
 		else if(object.type == EditorObjectType.PLATFORM){
-			float sx = worldXToScreen(object.x);
-			float sy = worldYToScreen(object.y);
-			shapes.rectLine(sx, sy, worldXToScreen(object.x + object.width), worldYToScreen(object.y + object.height), Math.max(4f, 16f * zoom));
+			shapes.rectLine(object.x, object.y, object.x + object.width, object.y + object.height, 16f);
 		}
 		else{
-			shapes.rect(worldXToScreen(object.x), worldYToScreen(object.y),
-					Math.max(1f, object.width * zoom), Math.max(1f, object.height * zoom));
+			shapes.rect(object.x, object.y, object.width, object.height);
 		}
 	}
 
 	private void drawObjectOutline(EditorLevelObject object, boolean selected){
 		if(selected)
-			shapes.setColor(1f, 0.88f, 0.18f, 1f);
+			shapes.setColor(COLOR_SELECTED);
 		else
-			shapes.setColor(0f, 0f, 0f, 0.65f);
+			shapes.setColor(COLOR_OUTLINE);
 		if(object.type == EditorObjectType.START){
-			shapes.circle(worldXToScreen(object.x + object.width / 2f), worldYToScreen(object.y + object.height / 2f),
-					Math.max(5f, object.width * zoom / 2f), 28);
+			shapes.circle(object.x + object.width / 2f, object.y + object.height / 2f, object.width / 2f, 20);
 		}
 		else if(object.type == EditorObjectType.POLYGON){
-			float sx = worldXToScreen(object.x);
-			float sy = worldYToScreen(object.y);
-			float sw = object.width * zoom;
-			float sh = object.height * zoom;
-			shapes.line(sx, sy + sh, sx + sw, sy + sh);
-			shapes.line(sx + sw, sy + sh, sx + sw, sy);
-			shapes.line(sx + sw, sy, sx, sy + sh);
+			shapes.line(object.x, object.y + object.height, object.x + object.width, object.y + object.height);
+			shapes.line(object.x + object.width, object.y + object.height, object.x + object.width, object.y);
+			shapes.line(object.x + object.width, object.y, object.x, object.y + object.height);
 		}
 		else if(object.type == EditorObjectType.PLATFORM){
-			shapes.line(worldXToScreen(object.x), worldYToScreen(object.y),
-					worldXToScreen(object.x + object.width), worldYToScreen(object.y + object.height));
+			shapes.line(object.x, object.y, object.x + object.width, object.y + object.height);
 		}
 		else{
-			shapes.rect(worldXToScreen(object.x), worldYToScreen(object.y),
-					Math.max(1f, object.width * zoom), Math.max(1f, object.height * zoom));
+			shapes.rect(object.x, object.y, object.width, object.height);
 		}
 	}
 
@@ -728,39 +786,39 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			return;
 		Vector2 world = screenToWorld(Gdx.input.getX(), Gdx.input.getY(), scratch);
 		shapes.setColor(1f, 1f, 1f, 0.22f);
-		shapes.circle(worldXToScreen(world.x), worldYToScreen(world.y), 20f, 20);
+		shapes.circle(world.x, world.y, 20f / Math.max(zoom, 0.01f), 20);
 	}
 
 	private void drawObjectLabels(){
+		EditorLevelObject labelObject = selectedObject != null ? selectedObject : hoveredObject;
+		if(labelObject == null || !isVisible(labelObject))
+			return;
 		game.batch.setProjectionMatrix(uiCamera.combined);
 		game.batch.begin();
-		font.setColor(0.95f, 0.97f, 1f, 0.95f);
-		for(EditorLevelObject object : level.objects){
-			if(object.width * zoom < 24f && object.type != EditorObjectType.START)
-				continue;
-			font.draw(game.batch, object.type.label, worldXToScreen(object.x) + 4f,
-					worldYToScreen(object.y + object.height) + 16f);
-		}
-		font.setColor(Color.WHITE);
+		editorFont.setColor(0.95f, 0.97f, 1f, 0.95f);
+		editorFont.draw(game.batch, labelObject.type.label,
+				LEFT_PANEL_WIDTH + (labelObject.x - cameraX) * zoom + 4f,
+				(labelObject.y + labelObject.height - cameraY) * zoom + 18f);
+		editorFont.setColor(Color.WHITE);
 		game.batch.end();
 	}
 
 	private Color objectColor(EditorObjectType type){
 		if(type == EditorObjectType.START)
-			return new Color(0.95f, 0.95f, 0.95f, 1f);
+			return COLOR_START;
 		if(type == EditorObjectType.EXIT)
-			return new Color(0.20f, 0.70f, 1f, 1f);
+			return COLOR_EXIT;
 		if(type == EditorObjectType.WATER)
-			return new Color(0.16f, 0.45f, 0.82f, 0.68f);
+			return COLOR_WATER;
 		if(type == EditorObjectType.LIGHT || type == EditorObjectType.REVOLVING || type == EditorObjectType.SWING
 				|| type == EditorObjectType.BALANCOIRE || type == EditorObjectType.SUSPENDU || type == EditorObjectType.POULIE
 				|| type == EditorObjectType.PLATFORM)
-			return new Color(0.89f, 0.55f, 0.24f, 0.95f);
+			return COLOR_DYNAMIC;
 		if(type == EditorObjectType.SPRING)
-			return new Color(0.25f, 0.82f, 0.42f, 0.95f);
+			return COLOR_SPRING;
 		if(type == EditorObjectType.POLYGON)
-			return new Color(0.64f, 0.63f, 0.67f, 0.95f);
-		return new Color(0.72f, 0.74f, 0.78f, 0.95f);
+			return COLOR_POLYGON;
+		return COLOR_SOLID;
 	}
 
 	private boolean isWorldScreen(int screenX, int screenY){
@@ -773,12 +831,67 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		return out.set(cameraX + (screenX - LEFT_PANEL_WIDTH) / zoom, cameraY + stageY / zoom);
 	}
 
-	private float worldXToScreen(float worldX){
-		return LEFT_PANEL_WIDTH + (worldX - cameraX) * zoom;
+	private void updateHover(){
+		updateHover(Gdx.input.getX(), Gdx.input.getY());
 	}
 
-	private float worldYToScreen(float worldY){
-		return (worldY - cameraY) * zoom;
+	private void updateHover(int screenX, int screenY){
+		if(!isWorldScreen(screenX, screenY)){
+			hoveredObject = null;
+			return;
+		}
+		Vector2 world = screenToWorld(screenX, screenY, scratch);
+		hoveredObject = level.findAt(world.x, world.y);
+	}
+
+	private void updateWorldCamera(){
+		float viewportWidth = getWorldScreenWidth() / Math.max(zoom, 0.01f);
+		float viewportHeight = Math.max(1f, Gdx.graphics.getHeight()) / Math.max(zoom, 0.01f);
+		worldCamera.setToOrtho(false, viewportWidth, viewportHeight);
+		worldCamera.position.set(cameraX + viewportWidth / 2f, cameraY + viewportHeight / 2f, 0f);
+		worldCamera.update();
+		visibleWorldBounds.set(cameraX, cameraY, viewportWidth, viewportHeight);
+	}
+
+	private float getWorldScreenWidth(){
+		return Math.max(1f, Gdx.graphics.getWidth() - LEFT_PANEL_WIDTH - RIGHT_PANEL_WIDTH);
+	}
+
+	private boolean isVisible(EditorLevelObject object){
+		float minX = Math.min(object.x, object.x + object.width);
+		float maxX = Math.max(object.x, object.x + object.width);
+		float minY = Math.min(object.y, object.y + object.height);
+		float maxY = Math.max(object.y, object.y + object.height);
+		if(object.type == EditorObjectType.PLATFORM){
+			minX -= 32f;
+			minY -= 32f;
+			maxX += 32f;
+			maxY += 32f;
+		}
+		return maxX >= visibleWorldBounds.x && minX <= visibleWorldBounds.x + visibleWorldBounds.width
+				&& maxY >= visibleWorldBounds.y && minY <= visibleWorldBounds.y + visibleWorldBounds.height;
+	}
+
+	private void logLayout(int width, int height){
+		String message = "level editor layout screen=" + width + "x" + height + " panels="
+				+ Math.round(LEFT_PANEL_WIDTH) + "," + Math.round(RIGHT_PANEL_WIDTH)
+				+ " buttonHeight=" + BUTTON_HEIGHT + " fieldHeight=" + FIELD_HEIGHT
+				+ " fontScale=" + number(EDITOR_FONT_SCALE)
+				+ " worldViewport=" + Math.round(getWorldScreenWidth()) + "x" + height;
+		if(message.equals(lastLayoutLog))
+			return;
+		lastLayoutLog = message;
+		DebugConfig.log(message);
+	}
+
+	private void logCamera(){
+		String message = "level editor camera x=" + number(cameraX) + " y=" + number(cameraY)
+				+ " zoom=" + number(zoom) + " viewport="
+				+ number(visibleWorldBounds.width) + "x" + number(visibleWorldBounds.height);
+		if(message.equals(lastCameraLog))
+			return;
+		lastCameraLog = message;
+		DebugConfig.log(message);
 	}
 
 	private String[] propertyNames(EditorObjectType type){

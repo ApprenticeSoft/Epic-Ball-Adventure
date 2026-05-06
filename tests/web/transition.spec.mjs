@@ -150,6 +150,22 @@ test('desktop editor opens and returns from playtest with Escape', async ({ page
     await page.waitForTimeout(300);
     await page.keyboard.press('E');
     await waitForDebugEvent(page, logs, 'level editor opened', 10000);
+    await waitForDebugEvent(page, logs, 'level editor layout', 10000);
+    const editorLayout = parseEditorLayoutEvent(await latestDebugEvent(page, 'level editor layout'));
+    expect(editorLayout.buttonHeight).toBeLessThanOrEqual(30);
+    expect(editorLayout.fieldHeight).toBeLessThanOrEqual(30);
+    expect(editorLayout.fontScale).toBeLessThan(0.12);
+    expect(editorLayout.worldViewport.width).toBeGreaterThan(200);
+    expect(editorLayout.worldViewport.height).toBe(editorLayout.screen.height);
+
+    const layoutEventCount = (await getDebugEvents(page)).filter(line => line.includes('level editor layout')).length;
+    await page.mouse.move(420, 320);
+    await page.mouse.move(620, 320);
+    await page.mouse.wheel(0, -420);
+    await waitForDebugEvent(page, logs, 'level editor camera', 10000);
+    const layoutEventCountAfterMouse = (await getDebugEvents(page)).filter(line => line.includes('level editor layout')).length;
+    expect(layoutEventCountAfterMouse).toBe(layoutEventCount);
+
     await page.keyboard.press('P');
     await waitForDebugEvent(page, logs, 'level editor playtest start', 10000);
     await waitForDebugEvent(page, logs, 'loaded editor test map', 10000);
@@ -272,6 +288,20 @@ function parseCameraLayoutEvent(event) {
     viewport: { width: Number(match[3]), height: Number(match[4]) },
     pixelsPerWorld: Number(match[5]),
     mobile: match[6] === 'true'
+  };
+}
+
+function parseEditorLayoutEvent(event) {
+  const match = event.match(/screen=([\d.]+)x([\d.]+) panels=([\d.]+),([\d.]+) buttonHeight=([\d.]+) fieldHeight=([\d.]+) fontScale=([\d.]+) worldViewport=([\d.]+)x([\d.]+)/);
+  if(!match)
+    throw new Error(`Cannot parse editor layout event: ${event}`);
+  return {
+    screen: { width: Number(match[1]), height: Number(match[2]) },
+    panels: { left: Number(match[3]), right: Number(match[4]) },
+    buttonHeight: Number(match[5]),
+    fieldHeight: Number(match[6]),
+    fontScale: Number(match[7]),
+    worldViewport: { width: Number(match[8]), height: Number(match[9]) }
   };
 }
 
