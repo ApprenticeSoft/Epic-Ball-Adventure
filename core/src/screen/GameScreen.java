@@ -53,7 +53,7 @@ public class GameScreen extends InputAdapter implements Screen{
 	private static final float MAX_FRAME_DELTA = 0.25f;
 	private static final int MAX_PHYSICS_STEPS = 5;
 	private static final float LEVEL_TRANSITION_DURATION = 1.35f;
-	private static final float MOBILE_CAMERA_SHORT_SIDE_WORLD = 56f;
+	private static final float MOBILE_CAMERA_SHORT_SIDE_WORLD = 48f;
 
 	final MyGdxGame game;
 	private MyCamera camera;
