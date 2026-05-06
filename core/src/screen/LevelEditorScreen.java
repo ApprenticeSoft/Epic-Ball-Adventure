@@ -132,6 +132,12 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private EditorObjectType activePaletteType;
 	private String lastLayoutLog;
 	private String lastCameraLog;
+	private boolean hoverDirty = true;
+	private int lastHoverScreenX = -1;
+	private int lastHoverScreenY = -1;
+	private float lastHoverCameraX;
+	private float lastHoverCameraY;
+	private float lastHoverZoom;
 
 	public LevelEditorScreen(final MyGdxGame game){
 		this.game = game;
@@ -151,7 +157,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	@Override
 	public void render(float delta) {
 		updateCamera(delta);
-		updateHover();
+		updateHoverIfNeeded();
 		Gdx.gl.glClearColor(COLOR_BACKGROUND.r, COLOR_BACKGROUND.g, COLOR_BACKGROUND.b, COLOR_BACKGROUND.a);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		drawWorld();
@@ -167,6 +173,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		uiCamera.update();
 		stage.getViewport().update(width, height, true);
 		updateWorldCamera();
+		markHoverDirty();
 		logLayout(width, height);
 	}
 
@@ -243,6 +250,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(activePaletteType != null){
 			placeObject(activePaletteType, world.x, world.y);
 			activePaletteType = null;
+			markHoverDirty();
 			return true;
 		}
 		if(selectedObject != null){
@@ -266,6 +274,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		}
 		if(previousSelection != selectedObject)
 			buildLeftPanel();
+		markHoverDirty();
 		return true;
 	}
 
@@ -284,6 +293,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		else if(dragMode == DragMode.DRAG_POINT){
 			selectedObject.setPointWorldPosition(draggedPointIndex, snap(world.x), snap(world.y));
 		}
+		markHoverDirty();
 		return true;
 	}
 
@@ -295,6 +305,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			resizeHorizontal = 0;
 			resizeVertical = 0;
 			buildLeftPanel();
+			updateHover(screenX, screenY);
 			logCamera();
 			return true;
 		}
@@ -304,7 +315,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	@Override
 	public boolean mouseMoved(int screenX, int screenY) {
 		EditorLevelObject previousHover = hoveredObject;
-		updateHover(screenX, screenY);
+		if(dragMode == DragMode.NONE)
+			updateHover(screenX, screenY);
 		return previousHover != hoveredObject;
 	}
 
@@ -709,6 +721,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			selectedObject = level.createObject(type, worldX, worldY);
 		}
 		buildLeftPanel();
+		markHoverDirty();
 		setStatus(selectedObject.type.label + " added");
 	}
 
@@ -718,6 +731,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		level.remove(selectedObject);
 		selectedObject = null;
 		buildLeftPanel();
+		markHoverDirty();
 		setStatus("Deleted");
 	}
 
@@ -728,6 +742,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private void updateCamera(float delta){
 		boolean cameraMoved = panLeft || panRight || panUp || panDown;
+		if(!cameraMoved)
+			return;
 		float speed = 900f * delta / zoom;
 		if(panLeft)
 			cameraX -= speed;
@@ -738,8 +754,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(panDown)
 			cameraY -= speed;
 		updateWorldCamera();
-		if(cameraMoved)
-			logCamera();
+		markHoverDirty();
+		logCamera();
 	}
 
 	private void zoomAtScreen(int screenX, int screenY, float factor){
@@ -750,6 +766,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		cameraX += before.x - after.x;
 		cameraY += before.y - after.y;
 		updateWorldCamera();
+		markHoverDirty();
 		logCamera();
 	}
 
@@ -949,9 +966,10 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			return -1;
 		object.ensureDefaultPoints();
 		float tolerance = HANDLE_SCREEN_RADIUS / Math.max(zoom, 0.01f);
+		float toleranceSquared = tolerance * tolerance;
 		for(int i = 0; i < object.points.size; i++){
 			Vector2 point = object.points.get(i);
-			if(scratch2.set(object.x + point.x - worldX, object.y + point.y - worldY).len() <= tolerance)
+			if(scratch2.set(object.x + point.x - worldX, object.y + point.y - worldY).len2() <= toleranceSquared)
 				return i;
 		}
 		return -1;
@@ -1024,17 +1042,34 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		return out.set(cameraX + (screenX - LEFT_PANEL_WIDTH) / zoom, cameraY + stageY / zoom);
 	}
 
-	private void updateHover(){
-		updateHover(Gdx.input.getX(), Gdx.input.getY());
+	private void updateHoverIfNeeded(){
+		if(dragMode != DragMode.NONE)
+			return;
+		int screenX = Gdx.input.getX();
+		int screenY = Gdx.input.getY();
+		if(!hoverDirty && screenX == lastHoverScreenX && screenY == lastHoverScreenY
+				&& cameraX == lastHoverCameraX && cameraY == lastHoverCameraY && zoom == lastHoverZoom)
+			return;
+		updateHover(screenX, screenY);
 	}
 
 	private void updateHover(int screenX, int screenY){
+		lastHoverScreenX = screenX;
+		lastHoverScreenY = screenY;
+		lastHoverCameraX = cameraX;
+		lastHoverCameraY = cameraY;
+		lastHoverZoom = zoom;
+		hoverDirty = false;
 		if(!isWorldScreen(screenX, screenY)){
 			hoveredObject = null;
 			return;
 		}
 		Vector2 world = screenToWorld(screenX, screenY, scratch);
 		hoveredObject = level.findAt(world.x, world.y);
+	}
+
+	private void markHoverDirty(){
+		hoverDirty = true;
 	}
 
 	private void updateWorldCamera(){

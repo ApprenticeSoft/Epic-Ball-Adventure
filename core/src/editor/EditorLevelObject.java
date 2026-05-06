@@ -16,6 +16,11 @@ public class EditorLevelObject {
 	public float rotation;
 	public final ObjectMap<String, String> properties = new ObjectMap<String, String>();
 	public final Array<Vector2> points = new Array<Vector2>();
+	private boolean boundsDirty = true;
+	private float localMinX;
+	private float localMaxX;
+	private float localMinY;
+	private float localMaxY;
 
 	public EditorLevelObject(EditorObjectType type, float x, float y, float width, float height){
 		this.runtimeId = nextRuntimeId++;
@@ -33,6 +38,7 @@ public class EditorLevelObject {
 			copy.properties.put(entry.key, entry.value);
 		for(Vector2 point : points)
 			copy.points.add(new Vector2(point));
+		copy.markBoundsDirty();
 		return copy;
 	}
 
@@ -40,7 +46,7 @@ public class EditorLevelObject {
 		if(type == EditorObjectType.POLYGON)
 			return containsPolygon(worldX - x, worldY - y);
 		if(type == EditorObjectType.PLATFORM)
-			return distanceToPolyline(worldX - x, worldY - y) <= 18f;
+			return distanceToPolylineSquared(worldX - x, worldY - y) <= 18f * 18f;
 		return worldX >= getMinX() && worldX <= getMaxX() && worldY >= getMinY() && worldY <= getMaxY();
 	}
 
@@ -50,6 +56,7 @@ public class EditorLevelObject {
 		else if(type == EditorObjectType.PLATFORM && points.size == 0){
 			points.add(new Vector2(0f, 0f));
 			points.add(new Vector2(width, height));
+			markBoundsDirty();
 		}
 	}
 
@@ -75,6 +82,7 @@ public class EditorLevelObject {
 			points.add(new Vector2(centerX + (float)Math.cos(angle) * radiusX,
 					centerY + (float)Math.sin(angle) * radiusY));
 		}
+		markBoundsDirty();
 	}
 
 	public void setPlatformPointCount(int count){
@@ -87,6 +95,7 @@ public class EditorLevelObject {
 			float alpha = count == 1 ? 0f : (float)i / (float)(count - 1);
 			points.add(new Vector2(start.x + (end.x - start.x) * alpha, start.y + (end.y - start.y) * alpha));
 		}
+		markBoundsDirty();
 		syncPlatformEndpointSize();
 	}
 
@@ -94,6 +103,7 @@ public class EditorLevelObject {
 		if(index < 0 || index >= points.size)
 			return;
 		points.get(index).set(worldX - x, worldY - y);
+		markBoundsDirty();
 		if(type == EditorObjectType.PLATFORM)
 			syncPlatformEndpointSize();
 		else if(type == EditorObjectType.POLYGON)
@@ -103,6 +113,7 @@ public class EditorLevelObject {
 	public void setPlatformEnd(float endX, float endY){
 		ensureDefaultPoints();
 		points.peek().set(endX, endY);
+		markBoundsDirty();
 		syncPlatformEndpointSize();
 	}
 
@@ -119,6 +130,7 @@ public class EditorLevelObject {
 			point.x = minX + (point.x - minX) * scaleX;
 			point.y = minY + (point.y - minY) * scaleY;
 		}
+		markBoundsDirty();
 		width = Math.max(1f, newWidth);
 		height = Math.max(1f, newHeight);
 		if(type == EditorObjectType.PLATFORM)
@@ -145,25 +157,25 @@ public class EditorLevelObject {
 
 	public float getMinX(){
 		if(usesPointGeometry())
-			return x + getLocalMinX();
+			return x + localMinX();
 		return Math.min(x, x + width);
 	}
 
 	public float getMaxX(){
 		if(usesPointGeometry())
-			return x + getLocalMaxX();
+			return x + localMaxX();
 		return Math.max(x, x + width);
 	}
 
 	public float getMinY(){
 		if(usesPointGeometry())
-			return y + getLocalMinY();
+			return y + localMinY();
 		return Math.min(y, y + height);
 	}
 
 	public float getMaxY(){
 		if(usesPointGeometry())
-			return y + getLocalMaxY();
+			return y + localMaxY();
 		return Math.max(y, y + height);
 	}
 
@@ -181,81 +193,110 @@ public class EditorLevelObject {
 					&& localX < (pj.x - pi.x) * (localY - pi.y) / (pj.y - pi.y) + pi.x)
 				inside = !inside;
 		}
-		return inside || distanceToClosedPolyline(localX, localY) <= 18f;
+		return inside || distanceToClosedPolylineSquared(localX, localY) <= 18f * 18f;
 	}
 
-	private float distanceToPolyline(float localX, float localY){
+	private float distanceToPolylineSquared(float localX, float localY){
 		ensureDefaultPoints();
 		float distance = Float.MAX_VALUE;
 		for(int i = 0; i < points.size - 1; i++){
 			Vector2 a = points.get(i);
 			Vector2 b = points.get(i + 1);
-			distance = Math.min(distance, distanceToSegment(localX, localY, a.x, a.y, b.x, b.y));
+			distance = Math.min(distance, distanceToSegmentSquared(localX, localY, a.x, a.y, b.x, b.y));
 		}
 		return distance;
 	}
 
-	private float distanceToClosedPolyline(float localX, float localY){
-		float distance = distanceToPolyline(localX, localY);
+	private float distanceToClosedPolylineSquared(float localX, float localY){
+		float distance = distanceToPolylineSquared(localX, localY);
 		if(points.size > 2){
 			Vector2 first = points.first();
 			Vector2 last = points.peek();
-			distance = Math.min(distance, distanceToSegment(localX, localY, last.x, last.y, first.x, first.y));
+			distance = Math.min(distance, distanceToSegmentSquared(localX, localY, last.x, last.y, first.x, first.y));
 		}
 		return distance;
 	}
 
 	private void updateWidthHeightFromPointBounds(){
-		width = Math.max(1f, getLocalMaxX() - getLocalMinX());
-		height = Math.max(1f, getLocalMaxY() - getLocalMinY());
+		width = Math.max(1f, localMaxX() - localMinX());
+		height = Math.max(1f, localMaxY() - localMinY());
 	}
 
 	private float getLocalMinX(){
-		ensureDefaultPoints();
-		float min = Float.MAX_VALUE;
-		for(Vector2 point : points)
-			min = Math.min(min, point.x);
-		return min == Float.MAX_VALUE ? 0f : min;
+		return localMinX();
 	}
 
 	private float getLocalMaxX(){
-		ensureDefaultPoints();
-		float max = -Float.MAX_VALUE;
-		for(Vector2 point : points)
-			max = Math.max(max, point.x);
-		return max == -Float.MAX_VALUE ? width : max;
+		return localMaxX();
 	}
 
 	private float getLocalMinY(){
-		ensureDefaultPoints();
-		float min = Float.MAX_VALUE;
-		for(Vector2 point : points)
-			min = Math.min(min, point.y);
-		return min == Float.MAX_VALUE ? 0f : min;
+		return localMinY();
 	}
 
 	private float getLocalMaxY(){
-		ensureDefaultPoints();
-		float max = -Float.MAX_VALUE;
-		for(Vector2 point : points)
-			max = Math.max(max, point.y);
-		return max == -Float.MAX_VALUE ? height : max;
+		return localMaxY();
 	}
 
-	private float distanceToSegment(float px, float py, float ax, float ay, float bx, float by){
+	private float localMinX(){
+		updateBoundsIfNeeded();
+		return localMinX;
+	}
+
+	private float localMaxX(){
+		updateBoundsIfNeeded();
+		return localMaxX;
+	}
+
+	private float localMinY(){
+		updateBoundsIfNeeded();
+		return localMinY;
+	}
+
+	private float localMaxY(){
+		updateBoundsIfNeeded();
+		return localMaxY;
+	}
+
+	private void updateBoundsIfNeeded(){
+		if(!boundsDirty)
+			return;
+		ensureDefaultPoints();
+		float minX = Float.MAX_VALUE;
+		float maxX = -Float.MAX_VALUE;
+		float minY = Float.MAX_VALUE;
+		float maxY = -Float.MAX_VALUE;
+		for(Vector2 point : points){
+			minX = Math.min(minX, point.x);
+			maxX = Math.max(maxX, point.x);
+			minY = Math.min(minY, point.y);
+			maxY = Math.max(maxY, point.y);
+		}
+		localMinX = minX == Float.MAX_VALUE ? 0f : minX;
+		localMaxX = maxX == -Float.MAX_VALUE ? width : maxX;
+		localMinY = minY == Float.MAX_VALUE ? 0f : minY;
+		localMaxY = maxY == -Float.MAX_VALUE ? height : maxY;
+		boundsDirty = false;
+	}
+
+	private float distanceToSegmentSquared(float px, float py, float ax, float ay, float bx, float by){
 		float dx = bx - ax;
 		float dy = by - ay;
 		float lengthSquared = dx * dx + dy * dy;
 		if(lengthSquared == 0)
-			return distance(px, py, ax, ay);
+			return distanceSquared(px, py, ax, ay);
 		float t = ((px - ax) * dx + (py - ay) * dy) / lengthSquared;
 		t = Math.max(0f, Math.min(1f, t));
-		return distance(px, py, ax + t * dx, ay + t * dy);
+		return distanceSquared(px, py, ax + t * dx, ay + t * dy);
 	}
 
-	private float distance(float ax, float ay, float bx, float by){
+	private float distanceSquared(float ax, float ay, float bx, float by){
 		float dx = ax - bx;
 		float dy = ay - by;
-		return (float)Math.sqrt(dx * dx + dy * dy);
+		return dx * dx + dy * dy;
+	}
+
+	private void markBoundsDirty(){
+		boundsDirty = true;
 	}
 }

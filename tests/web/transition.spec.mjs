@@ -185,6 +185,50 @@ test('desktop editor opens and returns from playtest with Escape', async ({ page
   }
 });
 
+test('desktop editor remains responsive while zooming and panning', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
+
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if (message.type() === 'error') {
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1&ballStartEditor=1');
+    await waitForDebugEvent(page, logs, 'level editor opened', 10000);
+    await page.mouse.move(720, 360);
+
+    const frameProbe = measureAnimationFrames(page, 1200);
+    for(let i = 0; i < 8; i++){
+      await page.mouse.wheel(0, i % 2 === 0 ? -240 : 240);
+      await page.keyboard.down(i % 2 === 0 ? 'ArrowRight' : 'ArrowLeft');
+      await page.waitForTimeout(45);
+      await page.keyboard.up(i % 2 === 0 ? 'ArrowRight' : 'ArrowLeft');
+    }
+    const frames = await frameProbe;
+
+    expect(frames.count).toBeGreaterThan(35);
+    expect(frames.maxDelta).toBeLessThan(180);
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
 test('desktop editor automatically returns after completed playtest', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
 
@@ -273,6 +317,27 @@ async function waitForDebugEvent(page, logs, needle, timeoutMs) {
   }
   const debugEvents = await getDebugEvents(page);
   throw new Error(`Timed out waiting for "${needle}". Debug events:\n${debugEvents.join('\n')}\n\nConsole logs:\n${logs.join('\n')}`);
+}
+
+async function measureAnimationFrames(page, durationMs) {
+  return page.evaluate(duration => new Promise(resolve => {
+    let count = 0;
+    let maxDelta = 0;
+    let last = performance.now();
+    const start = last;
+    function tick(now) {
+      count += 1;
+      maxDelta = Math.max(maxDelta, now - last);
+      last = now;
+      if(now - start >= duration) {
+        resolve({ count, maxDelta });
+      }
+      else {
+        requestAnimationFrame(tick);
+      }
+    }
+    requestAnimationFrame(tick);
+  }), durationMs);
 }
 
 async function getDebugEvents(page) {
