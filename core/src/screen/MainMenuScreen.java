@@ -25,6 +25,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.one.button.jam.MyGdxGame;
 
 public class MainMenuScreen extends InputAdapter implements Screen{
+	private static final float MOBILE_START_TEXT_MAX_SCALE = 0.62f;
 
 	final MyGdxGame game;
 	private OrthographicCamera camera;
@@ -35,6 +36,7 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 	private Label labelTitre, labelTitreOmbre, labelStart;
 	private Image transitionImage;
 	private float startAlpha = 0;
+	private boolean mobileStartText;
 	private boolean startRequested;
 
 	public MainMenuScreen(final MyGdxGame gam){
@@ -65,12 +67,11 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 		labelTitreOmbre = new Label(Variables.gameTitle, labelStyleOmbre);
 
-		if(Gdx.app.getType() == ApplicationType.Desktop)
-			labelStart = new Label("Press F to Start", labelStyleStart);
-		else if(Gdx.app.getType() == ApplicationType.Android || PlatformInfo.mobileBrowser)
+		mobileStartText = Gdx.app.getType() == ApplicationType.Android || PlatformInfo.mobileBrowser;
+		if(mobileStartText)
 			labelStart = new Label("Touch to Start", labelStyleStart);
 		else
-			labelStart = new Label("Press F to Start", labelStyleStart);
+			labelStart = new Label("Press F to start", labelStyleStart);
 
 		transitionImage = new Image(skin.getDrawable("WhiteSquare"));
 		transitionImage.setColor(new Color(237/256f, 27/256f, 81/256f,1));
@@ -150,6 +151,8 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 		labelTitreOmbre.pack();
 		float startScale = Math.min(1f, Math.min((width * 0.82f) / labelStart.getWidth(),
 				(height * 0.10f) / labelStart.getHeight()));
+		if(mobileStartText)
+			startScale = Math.min(startScale, MOBILE_START_TEXT_MAX_SCALE);
 		labelStart.setFontScale(startScale);
 		labelStart.pack();
 		labelTitre.setPosition(0.5f * width - labelTitre.getWidth()/2f,

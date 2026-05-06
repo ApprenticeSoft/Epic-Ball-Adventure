@@ -83,10 +83,13 @@ test('responsive UI elements fit portrait and landscape screens', async ({ page 
     assertCentered(loadingLayout.screen, loadingLayout.bounds, 2);
 
     const menuLayout = parseMenuLayoutEvent(await latestDebugEvent(page, 'main menu layout'));
-    const expectedStartText = testInfo.project.name.includes('mobile') ? 'Touch to Start' : 'Press F to Start';
+    const expectedStartText = testInfo.project.name.includes('mobile') ? 'Touch to Start' : 'Press F to start';
     expect(menuLayout.startText).toBe(expectedStartText);
     assertBoundsFit(menuLayout.screen, menuLayout.startBounds);
     assertHorizontallyCentered(menuLayout.screen, menuLayout.startBounds, 2);
+    if(testInfo.project.name.includes('mobile')){
+      expect(menuLayout.startBounds.height).toBeLessThanOrEqual(menuLayout.screen.height * 0.055);
+    }
     const startCenterY = menuLayout.startBounds.y + menuLayout.startBounds.height / 2;
     const expectedStartCenterY = menuLayout.titleBounds.y / 2;
     expect(Math.abs(startCenterY - expectedStartCenterY)).toBeLessThanOrEqual(Math.max(3, menuLayout.screen.height * 0.03));
