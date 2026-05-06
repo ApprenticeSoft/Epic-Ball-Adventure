@@ -4,6 +4,7 @@
 	<source path="com/one/button/jam" />
 	<source path="screen" />
 	<source path="utils" />
+	<source path="editor" />
 	<source path="bodies" />
 	<source path="Box2DUtils" />
 </module>

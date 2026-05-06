@@ -100,11 +100,19 @@ public class GameScreen extends InputAdapter implements Screen{
     private float debugAutoAdvanceElapsed;
     private String lastRestartLayoutLog;
     private String lastCameraLayoutLog;
-    private final Vector2 transitionVelocity = new Vector2();
-    private final Vector3 projectedBallPosition = new Vector3();
+	private final Vector2 transitionVelocity = new Vector2();
+	private final Vector3 projectedBallPosition = new Vector3();
+	private final TiledMap editorTestMap;
+	private final Screen editorReturnScreen;
 
 	public GameScreen(final MyGdxGame gam){
+		this(gam, null, null);
+	}
+
+	public GameScreen(final MyGdxGame gam, TiledMap testMap, Screen editorReturnScreen){
 		game = gam;
+		this.editorTestMap = testMap;
+		this.editorReturnScreen = editorReturnScreen;
 
 		Variables.levelComplete = false;
 		DebugConfig.log("GameScreen construct begin level=" + Variables.niveauSelectione
@@ -137,11 +145,19 @@ public class GameScreen extends InputAdapter implements Screen{
 
 		debugRenderer = new Box2DDebugRenderer();
 
-        DebugConfig.log("loading tmx level=" + Variables.niveauSelectione);
-        tiledMap = new TmxMapLoader().load("Levels/Level "+ Variables.niveauSelectione + ".tmx");
-        DebugConfig.log("loaded tmx level=" + Variables.niveauSelectione
-				+ " map=" + tiledMap.getProperties().get("width", Integer.class)
-				+ "x" + tiledMap.getProperties().get("height", Integer.class));
+		if(editorTestMap != null){
+			tiledMap = editorTestMap;
+			DebugConfig.log("loaded editor test map="
+					+ tiledMap.getProperties().get("width", Integer.class)
+					+ "x" + tiledMap.getProperties().get("height", Integer.class));
+		}
+		else{
+	        DebugConfig.log("loading tmx level=" + Variables.niveauSelectione);
+	        tiledMap = new TmxMapLoader().load("Levels/Level "+ Variables.niveauSelectione + ".tmx");
+	        DebugConfig.log("loaded tmx level=" + Variables.niveauSelectione
+					+ " map=" + tiledMap.getProperties().get("width", Integer.class)
+					+ "x" + tiledMap.getProperties().get("height", Integer.class));
+		}
         //tiledMap = new TmxMapLoader().load("Levels/Level 5.tmx");
         tiledMapRenderer = new OrthogonalTiledMapRendererWithSprites(tiledMap,Variables.WORLD_TO_BOX, game.batch);
 
@@ -525,7 +541,12 @@ public class GameScreen extends InputAdapter implements Screen{
 		renderTransitionFrame();
 
 		if(LevelProgression.transitionComplete(transitionElapsed, LEVEL_TRANSITION_DURATION)){
-	if(LevelProgression.hasNextLevel(Variables.niveauSelectione, Variables.nombreNiveaux))
+	if(editorReturnScreen != null){
+		gameCompleted = true;
+		DebugConfig.log("editor test complete");
+		drawGameCompleted();
+	}
+	else if(LevelProgression.hasNextLevel(Variables.niveauSelectione, Variables.nombreNiveaux))
 		queueNextLevel();
 	else{
 		gameCompleted = true;
@@ -684,6 +705,10 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public boolean keyDown(int keycode) {
+		if(editorReturnScreen != null && keycode == Keys.ESCAPE){
+			returnToEditor();
+			return true;
+		}
 		if(gameCompleted && keycode == Keys.SPACE){
 			returnToMainMenu();
 			return true;
@@ -708,6 +733,15 @@ public class GameScreen extends InputAdapter implements Screen{
 		Variables.restart = false;
 		Variables.fallRestartDelay = 2.136f;
 		game.setScreen(new MainMenuScreen(game));
+		dispose();
+	}
+
+	private void returnToEditor(){
+		DebugConfig.log("return to editor from test");
+		Variables.levelComplete = false;
+		Variables.restart = false;
+		Variables.fallRestartDelay = 2.136f;
+		game.setScreen(editorReturnScreen);
 		dispose();
 	}
 

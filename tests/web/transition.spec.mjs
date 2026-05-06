@@ -128,6 +128,47 @@ test('responsive UI elements fit portrait and landscape screens', async ({ page 
   }
 });
 
+test('desktop editor opens and returns from playtest with Escape', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
+
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if (message.type() === 'error') {
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1');
+    await waitForDebugEvent(page, logs, 'main menu layout', 10000);
+    await page.bringToFront();
+    await page.locator('canvas').click();
+    await page.waitForTimeout(300);
+    await page.keyboard.press('E');
+    await waitForDebugEvent(page, logs, 'level editor opened', 10000);
+    await page.keyboard.press('P');
+    await waitForDebugEvent(page, logs, 'level editor playtest start', 10000);
+    await waitForDebugEvent(page, logs, 'loaded editor test map', 10000);
+    await page.keyboard.press('Escape');
+    await waitForDebugEvent(page, logs, 'return to editor from test', 10000);
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
 async function waitForDebugEvent(page, logs, needle, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while(Date.now() < deadline){

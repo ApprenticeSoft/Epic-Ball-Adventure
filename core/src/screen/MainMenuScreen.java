@@ -26,6 +26,7 @@ import com.one.button.jam.MyGdxGame;
 
 public class MainMenuScreen extends InputAdapter implements Screen{
 	private static final float MOBILE_START_TEXT_MAX_SCALE = 0.62f;
+	private static final int WEBGL_E_KEYCODE = 33;
 
 	final MyGdxGame game;
 	private OrthographicCamera camera;
@@ -113,6 +114,11 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 	@Override
 	public boolean keyDown(int keycode) {
+		if((keycode == Keys.E || keycode == WEBGL_E_KEYCODE) && editorAvailable()) {
+			game.setScreen(new LevelEditorScreen(game));
+			dispose();
+			return true;
+		}
 		if(keycode == Keys.F || keycode == Keys.SPACE) {
 			startRequested = true;
 			return true;
@@ -120,9 +126,13 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 		return false;
 	}
 
+	private boolean editorAvailable(){
+		return Gdx.app.getType() != ApplicationType.Android && !PlatformInfo.mobileBrowser;
+	}
+
 	@Override
 	public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-		if(Gdx.app.getType() != ApplicationType.Desktop) {
+		if(Gdx.app.getType() == ApplicationType.Android || PlatformInfo.mobileBrowser) {
 			startRequested = true;
 			return true;
 		}
