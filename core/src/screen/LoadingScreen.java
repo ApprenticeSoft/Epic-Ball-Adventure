@@ -19,7 +19,9 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreetypeFontLoader.FreeTypeFontLoa
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.actions.Actions;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.one.button.jam.MyGdxGame;
+import utils.DebugConfig;
 
 public class LoadingScreen implements Screen{
 
@@ -38,7 +40,7 @@ public class LoadingScreen implements Screen{
 		textureLogo = new Texture(Gdx.files.internal("Images/Logo.png"), true);
 		textureLogo.setFilter(TextureFilter.MipMapLinearNearest, TextureFilter.MipMapLinearNearest);
 		imageLogo = new Image(textureLogo);
-		stage = new Stage();
+		stage = new Stage(new ScreenViewport());
 		resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
 		//Chargement du TextureAtlas
@@ -116,10 +118,16 @@ public class LoadingScreen implements Screen{
 		camera.setToOrtho(false, width, height);
 		camera.update();
 		stage.getViewport().update(width, height, true);
-		imageLogo.setHeight(5 * height/10f);
-		imageLogo.setWidth(imageLogo.getHeight() * textureLogo.getWidth() / textureLogo.getHeight());
+		float maxWidth = width * 0.82f;
+		float maxHeight = height * 0.50f;
+		float scale = Math.min(maxWidth / textureLogo.getWidth(), maxHeight / textureLogo.getHeight());
+		imageLogo.setWidth(textureLogo.getWidth() * scale);
+		imageLogo.setHeight(textureLogo.getHeight() * scale);
 		imageLogo.setPosition(width/2f - imageLogo.getWidth()/2f,
 				height/2f - imageLogo.getHeight()/2f);
+		DebugConfig.log("loading logo layout screen=" + width + "x" + height
+				+ " bounds=" + imageLogo.getX() + "," + imageLogo.getY()
+				+ "," + imageLogo.getWidth() + "," + imageLogo.getHeight());
 
 	}
 

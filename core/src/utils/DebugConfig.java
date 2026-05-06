@@ -5,6 +5,7 @@ import com.badlogic.gdx.Gdx;
 public final class DebugConfig {
 	public static boolean transitionLogs;
 	public static boolean autoAdvanceLevels;
+	public static boolean showRestartOverlay;
 	public static float autoAdvanceDelay = 0.35f;
 	public static int startLevel = 1;
 
@@ -27,6 +28,7 @@ public final class DebugConfig {
 	public static void reset(){
 		transitionLogs = false;
 		autoAdvanceLevels = false;
+		showRestartOverlay = false;
 		autoAdvanceDelay = 0.35f;
 		startLevel = 1;
 	}

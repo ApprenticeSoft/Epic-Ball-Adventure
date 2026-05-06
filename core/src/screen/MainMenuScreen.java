@@ -2,6 +2,7 @@ package screen;
 
 import utils.Variables;
 import utils.DebugConfig;
+import utils.PlatformInfo;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Application.ApplicationType;
@@ -20,6 +21,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.one.button.jam.MyGdxGame;
 
 public class MainMenuScreen extends InputAdapter implements Screen{
@@ -41,7 +43,7 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 		camera = new OrthographicCamera();
 		camera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
-		stage = new Stage();
+		stage = new Stage(new ScreenViewport());
 		skin = new Skin();
 
 		textureAtlas = game.assets.get("Images/Images.pack", TextureAtlas.class);
@@ -65,10 +67,10 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 		if(Gdx.app.getType() == ApplicationType.Desktop)
 			labelStart = new Label("Press F to Start", labelStyleStart);
-		else if(Gdx.app.getType() == ApplicationType.Android)
-			labelStart = new Label("Touch The Screen to Start", labelStyleStart);
+		else if(Gdx.app.getType() == ApplicationType.Android || PlatformInfo.mobileBrowser)
+			labelStart = new Label("Touch to Start", labelStyleStart);
 		else
-			labelStart = new Label("Press F or Touch to Start", labelStyleStart);
+			labelStart = new Label("Press F to Start", labelStyleStart);
 
 		transitionImage = new Image(skin.getDrawable("WhiteSquare"));
 		transitionImage.setColor(new Color(237/256f, 27/256f, 81/256f,1));
@@ -134,16 +136,36 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 		camera.update();
 		stage.getViewport().update(width, height, true);
 
+		labelTitre.setFontScale(1f);
+		labelTitreOmbre.setFontScale(1f);
+		labelStart.setFontScale(1f);
 		labelTitre.pack();
 		labelTitreOmbre.pack();
+		labelStart.pack();
+		float titleScale = Math.min(1f, Math.min((width * 0.90f) / labelTitre.getWidth(),
+				(height * 0.22f) / labelTitre.getHeight()));
+		labelTitre.setFontScale(titleScale);
+		labelTitreOmbre.setFontScale(titleScale);
+		labelTitre.pack();
+		labelTitreOmbre.pack();
+		float startScale = Math.min(1f, Math.min((width * 0.82f) / labelStart.getWidth(),
+				(height * 0.10f) / labelStart.getHeight()));
+		labelStart.setFontScale(startScale);
 		labelStart.pack();
 		labelTitre.setPosition(0.5f * width - labelTitre.getWidth()/2f,
 				0.5f * height - labelTitre.getHeight()/2f);
 		labelTitreOmbre.setPosition(labelTitre.getX() + width/380f,
 				labelTitre.getY() - width/380f);
+		float startCenterY = labelTitre.getY()/2f;
 		labelStart.setPosition(0.5f * width - labelStart.getWidth()/2f,
-				0.22f * width - labelStart.getHeight()/2f);
+				startCenterY - labelStart.getHeight()/2f);
 		transitionImage.setBounds(-width, 0, width, height);
+		DebugConfig.log("main menu layout screen=" + width + "x" + height
+				+ " startText=" + labelStart.getText()
+				+ " titleBounds=" + labelTitre.getX() + "," + labelTitre.getY()
+				+ "," + labelTitre.getWidth() + "," + labelTitre.getHeight()
+				+ " startBounds=" + labelStart.getX() + "," + labelStart.getY()
+				+ "," + labelStart.getWidth() + "," + labelStart.getHeight());
 
 	}
 

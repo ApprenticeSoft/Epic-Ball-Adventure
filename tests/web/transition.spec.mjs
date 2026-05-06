@@ -60,6 +60,64 @@ test('auto-advances through every level without a black screen', async ({ page }
   }
 });
 
+test('responsive UI elements fit portrait and landscape screens', async ({ page }, testInfo) => {
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if (message.type() === 'error') {
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1&ballDebugRestartOverlay=1');
+
+    await waitForDebugEvent(page, logs, 'loading logo layout', 10000);
+    await waitForDebugEvent(page, logs, 'main menu layout', 10000);
+
+    const loadingLayout = parseLayoutEvent(await latestDebugEvent(page, 'loading logo layout'));
+    assertBoundsFit(loadingLayout.screen, loadingLayout.bounds);
+    assertCentered(loadingLayout.screen, loadingLayout.bounds, 2);
+
+    const menuLayout = parseMenuLayoutEvent(await latestDebugEvent(page, 'main menu layout'));
+    const expectedStartText = testInfo.project.name.includes('mobile') ? 'Touch to Start' : 'Press F to Start';
+    expect(menuLayout.startText).toBe(expectedStartText);
+    assertBoundsFit(menuLayout.screen, menuLayout.startBounds);
+    assertHorizontallyCentered(menuLayout.screen, menuLayout.startBounds, 2);
+    const startCenterY = menuLayout.startBounds.y + menuLayout.startBounds.height / 2;
+    const expectedStartCenterY = menuLayout.titleBounds.y / 2;
+    expect(Math.abs(startCenterY - expectedStartCenterY)).toBeLessThanOrEqual(Math.max(3, menuLayout.screen.height * 0.03));
+
+    await startGame(page, testInfo.project.name);
+    await waitForDebugEvent(page, logs, 'restart label layout', 10000);
+    const portraitRestartLayout = parseLayoutEvent(await latestDebugEvent(page, 'restart label layout'));
+    assertBoundsFit(portraitRestartLayout.screen, portraitRestartLayout.bounds);
+    assertCentered(portraitRestartLayout.screen, portraitRestartLayout.bounds, 3);
+
+    const viewport = page.viewportSize();
+    await page.setViewportSize({ width: viewport.height, height: viewport.width });
+    await waitForRestartScreenChange(page, portraitRestartLayout.screen, 10000);
+    const landscapeRestartLayout = parseLayoutEvent(await latestDebugEvent(page, 'restart label layout'));
+    assertBoundsFit(landscapeRestartLayout.screen, landscapeRestartLayout.bounds);
+    assertCentered(landscapeRestartLayout.screen, landscapeRestartLayout.bounds, 3);
+
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
 async function waitForDebugEvent(page, logs, needle, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while(Date.now() < deadline){
@@ -76,6 +134,38 @@ async function getDebugEvents(page) {
   return await page.evaluate(() => window.__epicBallDebugEvents || []);
 }
 
+async function latestDebugEvent(page, needle) {
+  const debugEvents = await getDebugEvents(page);
+  for(let i = debugEvents.length - 1; i >= 0; i--){
+    if(debugEvents[i].includes(needle))
+      return debugEvents[i];
+  }
+  throw new Error(`Missing debug event "${needle}". Events:\n${debugEvents.join('\n')}`);
+}
+
+async function waitForRestartScreenChange(page, previousScreen, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while(Date.now() < deadline){
+    const latest = await latestDebugEvent(page, 'restart label layout');
+    const layout = parseLayoutEvent(latest);
+    if(Math.abs(layout.screen.width - previousScreen.width) > 1
+        || Math.abs(layout.screen.height - previousScreen.height) > 1)
+      return;
+    await page.waitForTimeout(100);
+  }
+  const debugEvents = await getDebugEvents(page);
+  throw new Error(`Timed out waiting for restart layout to resize. Events:\n${debugEvents.join('\n')}`);
+}
+
+async function startGame(page, projectName) {
+  if(projectName.includes('mobile')){
+    const viewport = page.viewportSize();
+    await page.touchscreen.tap(viewport.width / 2, viewport.height / 2);
+    return;
+  }
+  await page.keyboard.press('F');
+}
+
 async function returnFromCompletion(page, projectName) {
   if(projectName.includes('mobile')){
     const viewport = page.viewportSize();
@@ -83,6 +173,61 @@ async function returnFromCompletion(page, projectName) {
     return;
   }
   await page.keyboard.press('Space');
+}
+
+function parseLayoutEvent(event) {
+  const match = event.match(/screen=([\d.]+)x([\d.]+).*bounds=([\d.-]+),([\d.-]+),([\d.-]+),([\d.-]+)/);
+  if(!match)
+    throw new Error(`Cannot parse layout event: ${event}`);
+  return {
+    screen: { width: Number(match[1]), height: Number(match[2]) },
+    bounds: {
+      x: Number(match[3]),
+      y: Number(match[4]),
+      width: Number(match[5]),
+      height: Number(match[6])
+    }
+  };
+}
+
+function parseMenuLayoutEvent(event) {
+  const match = event.match(/screen=([\d.]+)x([\d.]+) startText=(.*) titleBounds=([\d.-]+),([\d.-]+),([\d.-]+),([\d.-]+) startBounds=([\d.-]+),([\d.-]+),([\d.-]+),([\d.-]+)/);
+  if(!match)
+    throw new Error(`Cannot parse menu layout event: ${event}`);
+  return {
+    screen: { width: Number(match[1]), height: Number(match[2]) },
+    startText: match[3],
+    titleBounds: {
+      x: Number(match[4]),
+      y: Number(match[5]),
+      width: Number(match[6]),
+      height: Number(match[7])
+    },
+    startBounds: {
+      x: Number(match[8]),
+      y: Number(match[9]),
+      width: Number(match[10]),
+      height: Number(match[11])
+    }
+  };
+}
+
+function assertBoundsFit(screen, bounds) {
+  expect(bounds.x).toBeGreaterThanOrEqual(-1);
+  expect(bounds.y).toBeGreaterThanOrEqual(-1);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(screen.width + 1);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(screen.height + 1);
+}
+
+function assertCentered(screen, bounds, tolerance) {
+  assertHorizontallyCentered(screen, bounds, tolerance);
+  const centerY = bounds.y + bounds.height / 2;
+  expect(Math.abs(centerY - screen.height / 2)).toBeLessThanOrEqual(tolerance);
+}
+
+function assertHorizontallyCentered(screen, bounds, tolerance) {
+  const centerX = bounds.x + bounds.width / 2;
+  expect(Math.abs(centerX - screen.width / 2)).toBeLessThanOrEqual(tolerance);
 }
 
 async function screenshotHasNonBlackPixels(page) {

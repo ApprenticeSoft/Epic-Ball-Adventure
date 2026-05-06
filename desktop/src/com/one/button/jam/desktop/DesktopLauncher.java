@@ -48,6 +48,7 @@ public class DesktopLauncher {
     private static void configureDebug() {
         DebugConfig.transitionLogs = Boolean.getBoolean("ball.debug");
         DebugConfig.autoAdvanceLevels = Boolean.getBoolean("ball.autoAdvance");
+        DebugConfig.showRestartOverlay = Boolean.getBoolean("ball.debugRestartOverlay");
         DebugConfig.startLevel = Integer.getInteger("ball.startLevel", 1);
         DebugConfig.autoAdvanceDelay = Float.parseFloat(System.getProperty("ball.autoAdvanceDelay", "0.35"));
     }

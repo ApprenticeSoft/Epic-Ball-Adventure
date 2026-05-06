@@ -6,6 +6,7 @@ import com.badlogic.gdx.backends.gwt.GwtApplicationConfiguration;
 import com.google.gwt.user.client.Window;
 import com.one.button.jam.MyGdxGame;
 import utils.DebugConfig;
+import utils.PlatformInfo;
 
 public class HtmlLauncher extends GwtApplication {
     @Override
@@ -26,8 +27,10 @@ public class HtmlLauncher extends GwtApplication {
     private void configureDebug() {
         DebugConfig.transitionLogs = hasFlag("ballDebug");
         DebugConfig.autoAdvanceLevels = hasFlag("ballAutoAdvance");
+        DebugConfig.showRestartOverlay = hasFlag("ballDebugRestartOverlay");
         DebugConfig.startLevel = getIntParameter("ballStartLevel", 1);
         DebugConfig.autoAdvanceDelay = getFloatParameter("ballAutoAdvanceDelay", 0.35f);
+        PlatformInfo.mobileBrowser = isMobileBrowser();
     }
 
     private boolean hasFlag(String name) {
@@ -71,4 +74,9 @@ public class HtmlLauncher extends GwtApplication {
         }
         return null;
     }
+
+    private static native boolean isMobileBrowser() /*-{
+        var userAgent = ($wnd.navigator && $wnd.navigator.userAgent) || "";
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    }-*/;
 }

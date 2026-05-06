@@ -43,6 +43,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
 import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.one.button.jam.Couleurs;
 import com.one.button.jam.MyGdxGame;
 
@@ -95,6 +96,7 @@ public class GameScreen extends InputAdapter implements Screen{
     private boolean transitionFallbackLogged;
     private boolean debugAutoAdvanceTriggered;
     private float debugAutoAdvanceElapsed;
+    private String lastRestartLayoutLog;
     private final Vector2 transitionVelocity = new Vector2();
     private final Vector3 projectedBallPosition = new Vector3();
 
@@ -152,7 +154,7 @@ public class GameScreen extends InputAdapter implements Screen{
         /*
          * Label restart
          */
-        stage = new Stage();
+        stage = new Stage(new ScreenViewport());
         labelStyleRestart = new LabelStyle();
 		labelStyleRestart.fontColor = new Color(237/256f, 246/256f, 47/256f,1);
 		labelStyleRestart.font = game.assets.get("fontRestart.ttf", BitmapFont.class);
@@ -235,9 +237,11 @@ public class GameScreen extends InputAdapter implements Screen{
 	Variables.restart = false;
 	lecteurCarte.restart();
         }
-        if(lecteurCarte.balle.restart){
+		if(lecteurCarte.balle.restart){
 	levelRestart();
         }
+        if(DebugConfig.showRestartOverlay && !Variables.levelComplete && !gameCompleted)
+			debugRestartOverlay();
 	}
 
 	@Override
@@ -498,6 +502,14 @@ public class GameScreen extends InputAdapter implements Screen{
 	stage.draw();
 	}
 
+	private void debugRestartOverlay(){
+		labelRestart.setText("Restart in\n3");
+		labelRestartOmbre.setText("Restart in\n3");
+		layoutRestartLabels();
+		stage.act();
+		stage.draw();
+	}
+
 	private void initializeLevelTransition(){
 		if(transitionInitialized)
 			return;
@@ -660,12 +672,36 @@ public class GameScreen extends InputAdapter implements Screen{
 	private void layoutRestartLabels(){
 		if(labelRestart == null || labelRestartOmbre == null)
 			return;
+		float width = stage != null ? stage.getViewport().getWorldWidth() : Gdx.graphics.getWidth();
+		float height = stage != null ? stage.getViewport().getWorldHeight() : Gdx.graphics.getHeight();
+		width = Math.max(1f, width);
+		height = Math.max(1f, height);
+
+		labelRestart.setFontScale(1f);
+		labelRestartOmbre.setFontScale(1f);
 		labelRestart.pack();
 		labelRestartOmbre.pack();
-		labelRestart.setPosition(0.5f * Gdx.graphics.getWidth() - labelRestart.getWidth()/2,
-				0.5f * Gdx.graphics.getHeight() - labelRestart.getHeight()/2);
-		labelRestartOmbre.setPosition(labelRestart.getX() + Gdx.graphics.getWidth()/380f,
-				labelRestart.getY() - Gdx.graphics.getWidth()/380f);
+		float scale = Math.min(1f, Math.min((width * 0.88f) / labelRestart.getWidth(),
+				(height * 0.42f) / labelRestart.getHeight()));
+		labelRestart.setFontScale(scale);
+		labelRestartOmbre.setFontScale(scale);
+		labelRestart.pack();
+		labelRestartOmbre.pack();
+		labelRestart.setAlignment(Align.center);
+		labelRestartOmbre.setAlignment(Align.center);
+		labelRestart.setPosition(0.5f * width - labelRestart.getWidth()/2,
+				0.5f * height - labelRestart.getHeight()/2);
+		labelRestartOmbre.setPosition(labelRestart.getX() + width/380f,
+				labelRestart.getY() - width/380f);
+		String text = labelRestart.getText().toString().replace('\n', '|');
+		String layoutLog = "restart label layout screen=" + width + "x" + height
+				+ " text=" + text
+				+ " bounds=" + labelRestart.getX() + "," + labelRestart.getY()
+				+ "," + labelRestart.getWidth() + "," + labelRestart.getHeight();
+		if(!layoutLog.equals(lastRestartLayoutLog)){
+			lastRestartLayoutLog = layoutLog;
+			DebugConfig.log(layoutLog);
+		}
 	}
 
 	private int getBackBufferWidth(){
