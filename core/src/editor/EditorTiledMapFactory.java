@@ -48,19 +48,12 @@ public final class EditorTiledMapFactory {
 	private static MapObject createObject(EditorLevelObject object){
 		MapObject mapObject;
 		if(object.type == EditorObjectType.POLYGON){
-			Polygon polygon = new Polygon(new float[]{
-					0f, object.height,
-					object.width, object.height,
-					object.width, 0f
-			});
+			Polygon polygon = new Polygon(object.pointVertices());
 			polygon.setPosition(object.x, object.y);
 			mapObject = new PolygonMapObject(polygon);
 		}
 		else if(object.type == EditorObjectType.PLATFORM){
-			Polyline polyline = new Polyline(new float[]{
-					0f, 0f,
-					object.width, object.height
-			});
+			Polyline polyline = new Polyline(object.pointVertices());
 			polyline.setPosition(object.x, object.y);
 			mapObject = new PolylineMapObject(polyline);
 		}

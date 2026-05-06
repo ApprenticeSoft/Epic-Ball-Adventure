@@ -28,6 +28,7 @@ public class HtmlLauncher extends GwtApplication {
         DebugConfig.transitionLogs = hasFlag("ballDebug");
         DebugConfig.autoAdvanceLevels = hasFlag("ballAutoAdvance");
         DebugConfig.showRestartOverlay = hasFlag("ballDebugRestartOverlay");
+        DebugConfig.startEditor = hasFlag("ballStartEditor");
         DebugConfig.startLevel = getIntParameter("ballStartLevel", 1);
         DebugConfig.autoAdvanceDelay = getFloatParameter("ballAutoAdvanceDelay", 0.35f);
         PlatformInfo.mobileBrowser = isMobileBrowser();

@@ -48,11 +48,9 @@ public class EditorLevel {
 			object.properties.put("Speed", "15");
 		}
 		else if(type == EditorObjectType.SWING){
-			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);
+			object = new EditorLevelObject(type, snap(centerX - 360f), snap(centerY - 16f), 720f, 32f);
 			object.properties.put("Position", "0");
 			object.properties.put("Weight", "15");
-			object.properties.put("Speed", "1");
-			object.properties.put("Torque", "1");
 		}
 		else if(type == EditorObjectType.BALANCOIRE){
 			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);
@@ -74,11 +72,13 @@ public class EditorLevel {
 		}
 		else if(type == EditorObjectType.PLATFORM){
 			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY), 256f, 0f);
+			object.ensureDefaultPoints();
 			object.properties.put("Speed", "5");
 			object.properties.put("Width", "2");
 		}
 		else if(type == EditorObjectType.POLYGON){
 			object = new EditorLevelObject(type, snap(centerX - 96f), snap(centerY - 64f), 192f, 128f);
+			object.ensureDefaultPoints();
 		}
 		else{
 			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);

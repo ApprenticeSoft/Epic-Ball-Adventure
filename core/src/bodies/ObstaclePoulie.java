@@ -116,7 +116,7 @@ public class ObstaclePoulie extends Obstacle{
 	public void draw(SpriteBatch batch, TextureAtlas textureAtlas){
 		//Dessin de la corde gauche
 		batch.setColor(0,0,0,1);
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 					(pulleyJoint.getAnchorA().x + pulleyJoint.getGroundAnchorA().x - epaisseurCorde)/2,
 					(pulleyJoint.getAnchorA().y + pulleyJoint.getGroundAnchorA().y - pulleyJoint.getGroundAnchorA().sub(pulleyJoint.getAnchorA()).len())/2,
 					epaisseurCorde/2,																		//Origine X (pour la rotation)
@@ -129,7 +129,7 @@ public class ObstaclePoulie extends Obstacle{
 					);
 
 		//Dessin de la corde droite
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 				(pulleyJoint.getAnchorB().x + pulleyJoint.getGroundAnchorB().x - epaisseurCorde)/2,
 				(pulleyJoint.getAnchorB().y + pulleyJoint.getGroundAnchorB().y - pulleyJoint.getGroundAnchorB().sub(pulleyJoint.getAnchorB()).len())/2,
 				epaisseurCorde/2,																		//Origine X (pour la rotation)
@@ -142,7 +142,7 @@ public class ObstaclePoulie extends Obstacle{
 				);
 
 		//Dessin de la corde transversalle
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 				(pulleyJoint.getGroundAnchorA().x + pulleyJoint.getGroundAnchorB().x - epaisseurCorde)/2,
 				(pulleyJoint.getGroundAnchorA().y + pulleyJoint.getGroundAnchorB().y - pulleyJoint.getGroundAnchorB().sub(pulleyJoint.getGroundAnchorA()).len())/2,
 				epaisseurCorde/2,																		//Origine X (pour la rotation)
@@ -156,7 +156,7 @@ public class ObstaclePoulie extends Obstacle{
 
 		//Dessin du plateau gauche
 		batch.setColor(getCouleur());
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 				this.body.getPosition().x - width,
 				this.body.getPosition().y - height,
 				width,
@@ -168,7 +168,7 @@ public class ObstaclePoulie extends Obstacle{
 				body.getAngle()*MathUtils.radiansToDegrees);
 
 		//Dessin du plateau droite
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 				this.body2.getPosition().x - width2,
 				this.body2.getPosition().y - height2,
 				width2,
@@ -184,7 +184,7 @@ public class ObstaclePoulie extends Obstacle{
 	public void drawOmbre(SpriteBatch batch, TextureAtlas textureAtlas){
 		//Dessin de la corde gauche
 		batch.setColor(0,0,0,1);
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 					(pulleyJoint.getAnchorA().x + pulleyJoint.getGroundAnchorA().x - epaisseurCorde)/2 + Variables.ombresX,
 					(pulleyJoint.getAnchorA().y + pulleyJoint.getGroundAnchorA().y - pulleyJoint.getGroundAnchorA().sub(pulleyJoint.getAnchorA()).len())/2 + Variables.ombresY,
 					epaisseurCorde/2,																		//Origine X (pour la rotation)
@@ -197,7 +197,7 @@ public class ObstaclePoulie extends Obstacle{
 					);
 
 		//Dessin de la corde droite
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 				(pulleyJoint.getAnchorB().x + pulleyJoint.getGroundAnchorB().x - epaisseurCorde)/2 + Variables.ombresX,
 				(pulleyJoint.getAnchorB().y + pulleyJoint.getGroundAnchorB().y - pulleyJoint.getGroundAnchorB().sub(pulleyJoint.getAnchorB()).len())/2 + Variables.ombresY,
 				epaisseurCorde/2,																		//Origine X (pour la rotation)
@@ -210,7 +210,7 @@ public class ObstaclePoulie extends Obstacle{
 				);
 
 		//Dessin de la corde transversalle
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 				(pulleyJoint.getGroundAnchorA().x + pulleyJoint.getGroundAnchorB().x - epaisseurCorde)/2 + Variables.ombresX,
 				(pulleyJoint.getGroundAnchorA().y + pulleyJoint.getGroundAnchorB().y - pulleyJoint.getGroundAnchorB().sub(pulleyJoint.getGroundAnchorA()).len())/2 + Variables.ombresY,
 				epaisseurCorde/2,																		//Origine X (pour la rotation)
@@ -224,7 +224,7 @@ public class ObstaclePoulie extends Obstacle{
 
 		//Dessin du plateau gauche
 		batch.setColor(getCouleur());
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 				this.body.getPosition().x - width + Variables.ombresX,
 				this.body.getPosition().y - height + Variables.ombresY,
 				width,
@@ -236,7 +236,7 @@ public class ObstaclePoulie extends Obstacle{
 				body.getAngle()*MathUtils.radiansToDegrees);
 
 		//Dessin du plateau droite
-		batch.draw(textureAtlas.findRegion("Barre"),
+		batch.draw(textureAtlas.findRegion("WhiteSquare"),
 				this.body2.getPosition().x - width2 + Variables.ombresX,
 				this.body2.getPosition().y - height2 + Variables.ombresY,
 				width2,

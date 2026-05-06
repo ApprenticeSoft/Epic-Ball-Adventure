@@ -544,7 +544,13 @@ public class GameScreen extends InputAdapter implements Screen{
 	if(editorReturnScreen != null){
 		gameCompleted = true;
 		DebugConfig.log("editor test complete");
-		drawGameCompleted();
+		Gdx.app.postRunnable(new Runnable() {
+			@Override
+			public void run() {
+				if(game.getScreen() == GameScreen.this)
+					returnToEditor();
+			}
+		});
 	}
 	else if(LevelProgression.hasNextLevel(Variables.niveauSelectione, Variables.nombreNiveaux))
 		queueNextLevel();

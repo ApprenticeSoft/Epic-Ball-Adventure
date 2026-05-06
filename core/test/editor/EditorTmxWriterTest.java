@@ -2,6 +2,7 @@ package editor;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class EditorTmxWriterTest {
@@ -23,5 +24,40 @@ public class EditorTmxWriterTest {
 		assertTrue(xml.contains("type=\"Poulie\""));
 		assertTrue(xml.contains("name=\"Groupe\""));
 		assertTrue(xml.contains("<polyline points=\"0,0 256,0\"/>"));
+	}
+
+	@Test
+	public void swingSelectionDoesNotNeedAngleLimitProperties(){
+		EditorLevel level = new EditorLevel();
+		EditorLevelObject swing = level.createObject(EditorObjectType.SWING, 1200, 500);
+
+		String xml = EditorTmxWriter.write(level);
+
+		assertTrue(xml.contains("type=\"Swing\""));
+		assertTrue(xml.contains("name=\"Position\""));
+		assertTrue(xml.contains("name=\"Weight\""));
+		assertFalse(xml.contains("name=\"angleRef\""));
+		assertFalse(xml.contains("name=\"angleMin\""));
+		assertFalse(xml.contains("name=\"angleMax\""));
+		assertFalse(xml.contains("name=\"Contact\""));
+		assertFalse(swing.properties.containsKey("angleRef"));
+	}
+
+	@Test
+	public void writesEditablePolygonAndPlatformPoints(){
+		EditorLevel level = new EditorLevel();
+		EditorLevelObject polygon = level.createObject(EditorObjectType.POLYGON, 320, 320);
+		polygon.setPolygonVertexCount(5);
+		polygon.setPointWorldPosition(2, polygon.x + 240, polygon.y + 64);
+		EditorLevelObject platform = level.createObject(EditorObjectType.PLATFORM, 640, 320);
+		platform.setPlatformPointCount(3);
+		platform.setPointWorldPosition(1, platform.x + 128, platform.y + 96);
+		platform.setPointWorldPosition(2, platform.x + 256, platform.y + 0);
+
+		String xml = EditorTmxWriter.write(level);
+
+		assertTrue(xml.contains("<polygon points=\""));
+		assertTrue(xml.contains("240,64"));
+		assertTrue(xml.contains("<polyline points=\"0,0 128,96 256,0\"/>"));
 	}
 }

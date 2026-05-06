@@ -82,7 +82,17 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 		stage.addActor(labelTitre);
 		stage.addActor(transitionImage);
 		resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-		if(DebugConfig.autoAdvanceLevels)
+		if(DebugConfig.startEditor && editorAvailable())
+			Gdx.app.postRunnable(new Runnable() {
+				@Override
+				public void run() {
+					if(game.getScreen() == MainMenuScreen.this) {
+						game.setScreen(new LevelEditorScreen(game));
+						dispose();
+					}
+				}
+			});
+		else if(DebugConfig.autoAdvanceLevels)
 			startRequested = true;
 	}
 

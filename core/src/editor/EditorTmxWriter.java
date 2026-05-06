@@ -70,16 +70,13 @@ public final class EditorTmxWriter {
 		if(object.type == EditorObjectType.POLYGON){
 			xml.append(">\n");
 			appendProperties(xml, object);
-			xml.append("   <polygon points=\"0,").append(number(object.height))
-					.append(" ").append(number(object.width)).append(",").append(number(object.height))
-					.append(" ").append(number(object.width)).append(",0\"/>\n");
+			xml.append("   <polygon points=\"").append(points(object)).append("\"/>\n");
 			xml.append("  </object>\n");
 		}
 		else if(object.type == EditorObjectType.PLATFORM){
 			xml.append(">\n");
 			appendProperties(xml, object);
-			xml.append("   <polyline points=\"0,0 ").append(number(object.width))
-					.append(",").append(number(object.height)).append("\"/>\n");
+			xml.append("   <polyline points=\"").append(points(object)).append("\"/>\n");
 			xml.append("  </object>\n");
 		}
 		else if(object.properties.size > 0){
@@ -143,6 +140,17 @@ public final class EditorTmxWriter {
 		if(Math.abs(value - Math.round(value)) < 0.0001f)
 			return String.valueOf(Math.round(value));
 		return String.valueOf(value);
+	}
+
+	private static String points(EditorLevelObject object){
+		float[] vertices = object.pointVertices();
+		StringBuilder builder = new StringBuilder();
+		for(int i = 0; i < vertices.length; i += 2){
+			if(i > 0)
+				builder.append(" ");
+			builder.append(number(vertices[i])).append(",").append(number(vertices[i + 1]));
+		}
+		return builder.toString();
 	}
 
 	private static String escape(String value){
