@@ -3,6 +3,7 @@ package screen;
 import editor.EditorFileBridge;
 import editor.EditorLevel;
 import editor.EditorLevelObject;
+import editor.EditorLevelObject.SnapMode;
 import editor.EditorObjectType;
 import editor.EditorTiledMapFactory;
 import editor.EditorTmxWriter;
@@ -24,6 +25,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -43,6 +45,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.one.button.jam.Couleurs;
 import com.one.button.jam.MyGdxGame;
 
 public class LevelEditorScreen extends InputAdapter implements Screen {
@@ -56,6 +59,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private static final float TITLE_FONT_SCALE = 1.12f;
 	private static final float BUTTON_HEIGHT = 28f;
 	private static final float FIELD_HEIGHT = 28f;
+	private static final float SCREEN_MARGIN = 6f;
+	private static final float PANEL_INNER_PADDING = 8f;
 	private static final float HANDLE_SCREEN_RADIUS = 7f;
 	private static final float EDGE_SCREEN_TOLERANCE = 9f;
 	private static final float MIN_OBJECT_SIZE = 16f;
@@ -69,23 +74,25 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private static final Color COLOR_LEVEL_BORDER = new Color(0.46f, 0.55f, 0.60f, 1f);
 	private static final Color COLOR_SELECTED = new Color(1f, 0.88f, 0.18f, 1f);
 	private static final Color COLOR_OUTLINE = new Color(0f, 0f, 0f, 0.65f);
-	private static final Color COLOR_START = new Color(0.95f, 0.95f, 0.95f, 1f);
-	private static final Color COLOR_EXIT = new Color(0.20f, 0.70f, 1f, 1f);
-	private static final Color COLOR_WATER = new Color(0.16f, 0.45f, 0.82f, 0.68f);
-	private static final Color COLOR_DYNAMIC = new Color(0.89f, 0.55f, 0.24f, 0.95f);
-	private static final Color COLOR_SPRING = new Color(0.25f, 0.82f, 0.42f, 0.95f);
-	private static final Color COLOR_POLYGON = new Color(0.64f, 0.63f, 0.67f, 0.95f);
-	private static final Color COLOR_SOLID = new Color(0.72f, 0.74f, 0.78f, 0.95f);
+	private static final float OBJECT_ALPHA = 0.62f;
+	private static final float START_ALPHA = 0.70f;
+	private static final float EXIT_ALPHA = 0.72f;
 
 	private final MyGdxGame game;
 	private final EditorLevel level = new EditorLevel();
+	private final Couleurs editorColors = new Couleurs(4);
 	private final OrthographicCamera uiCamera = new OrthographicCamera();
 	private final OrthographicCamera worldCamera = new OrthographicCamera();
 	private final ShapeRenderer shapes = new ShapeRenderer();
 	private final Stage stage = new Stage(new ScreenViewport());
 	private final Vector2 scratch = new Vector2();
 	private final Vector2 scratch2 = new Vector2();
+	private final Vector2 rectBottomLeft = new Vector2();
+	private final Vector2 rectBottomRight = new Vector2();
+	private final Vector2 rectTopRight = new Vector2();
+	private final Vector2 rectTopLeft = new Vector2();
 	private final Rectangle visibleWorldBounds = new Rectangle();
+	private final Color objectColorScratch = new Color();
 
 	private Texture uiTexture;
 	private Drawable panelDrawable;
@@ -284,14 +291,14 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			return false;
 		Vector2 world = screenToWorld(screenX, screenY, scratch);
 		if(dragMode == DragMode.MOVE){
-			selectedObject.x = snap(world.x - dragOffsetX);
-			selectedObject.y = snap(world.y - dragOffsetY);
+			selectedObject.x = snapForSelected(world.x - dragOffsetX);
+			selectedObject.y = snapForSelected(world.y - dragOffsetY);
 		}
 		else if(dragMode == DragMode.RESIZE_RECT){
 			resizeSelectedObject(world.x, world.y);
 		}
 		else if(dragMode == DragMode.DRAG_POINT){
-			selectedObject.setPointWorldPosition(draggedPointIndex, snap(world.x), snap(world.y));
+			selectedObject.setPointWorldPosition(draggedPointIndex, snapForSelected(world.x), snapForSelected(world.y));
 		}
 		markHoverDirty();
 		return true;
@@ -392,16 +399,19 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		Table root = new Table();
 		root.setFillParent(true);
 		root.setTouchable(Touchable.childrenOnly);
+		root.pad(SCREEN_MARGIN);
 		stage.addActor(root);
 
 		leftTable = new Table();
 		leftTable.setBackground(panelDrawable);
+		leftTable.pad(PANEL_INNER_PADDING);
 		leftTable.top();
 		ScrollPane leftScroll = new ScrollPane(leftTable);
 		leftScroll.setFadeScrollBars(false);
 
 		rightTable = new Table();
 		rightTable.setBackground(panelDrawable);
+		rightTable.pad(PANEL_INNER_PADDING);
 		rightTable.top();
 		ScrollPane rightScroll = new ScrollPane(rightTable);
 		rightScroll.setFadeScrollBars(false);
@@ -418,7 +428,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(leftTable == null)
 			return;
 		leftTable.clear();
-		leftTable.defaults().pad(2f).left().growX();
+		leftTable.defaults().pad(3f).left().growX();
 		addTitle(leftTable, "LEVEL");
 		fileNameField = addTextField(leftTable, "File", level.fileName, new TextSetter() {
 			@Override
@@ -461,6 +471,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(selectedObject != null){
 			leftTable.row().padTop(12);
 			addTitle(leftTable, selectedObject.type.label.toUpperCase());
+			addSnapButton(leftTable);
 			addNumberField(leftTable, "X", selectedObject.x, new NumberSetter() {
 				@Override
 				public void set(float value) {
@@ -533,6 +544,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 				@Override
 				public void set(float value) {
 					selectedObject.rotation = value;
+					selectedObject.snapMode = SnapMode.FREE;
+					markHoverDirty();
 				}
 			});
 			String[] propertyNames = propertyNames(selectedObject.type);
@@ -569,7 +582,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private void buildRightPanel(){
 		rightTable.clear();
-		rightTable.defaults().pad(2f).left().growX();
+		rightTable.defaults().pad(3f).left().growX();
 		addTitle(rightTable, "OBJECTS");
 		addPaletteButton(EditorObjectType.START, "Start");
 		addPaletteButton(EditorObjectType.SOLID, "Solid");
@@ -626,6 +639,20 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		table.add(button).height(BUTTON_HEIGHT).growX();
 		table.row();
 		return button;
+	}
+
+	private void addSnapButton(Table table){
+		final TextButton snapButton = addButton(table, snapLabel(selectedObject));
+		snapButton.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				if(selectedObject == null)
+					return;
+				selectedObject.snapMode = selectedObject.snapMode == SnapMode.GRID ? SnapMode.FREE : SnapMode.GRID;
+				setStatus(selectedObject.snapMode == SnapMode.GRID ? "Snap to grid" : "Free positioning");
+				buildLeftPanel();
+			}
+		});
 	}
 
 	private TextField addTextField(Table table, String labelText, String value, final TextSetter setter){
@@ -714,11 +741,13 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private void placeObject(EditorObjectType type, float worldX, float worldY){
 		if(type == null)
 			return;
+		float placedX = snap(worldX);
+		float placedY = snap(worldY);
 		if(type == EditorObjectType.POULIE){
-			selectedObject = level.createPulleyPair(worldX, worldY).first();
+			selectedObject = level.createPulleyPair(placedX, placedY).first();
 		}
 		else{
-			selectedObject = level.createObject(type, worldX, worldY);
+			selectedObject = level.createObject(type, placedX, placedY);
 		}
 		buildLeftPanel();
 		markHoverDirty();
@@ -771,16 +800,16 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	}
 
 	private void drawWorld(){
-		int viewportX = Math.round(LEFT_PANEL_WIDTH);
-		int viewportY = 0;
+		int viewportX = Math.round(getWorldScreenLeft());
+		int viewportY = Math.round(getWorldScreenBottom());
 		int viewportWidth = Math.max(1, Math.round(getWorldScreenWidth()));
-		int viewportHeight = Math.max(1, Gdx.graphics.getHeight());
+		int viewportHeight = Math.max(1, Math.round(getWorldScreenHeight()));
 
 		shapes.setProjectionMatrix(uiCamera.combined);
 		Gdx.gl.glEnable(GL20.GL_BLEND);
 		shapes.begin(ShapeRenderer.ShapeType.Filled);
 		shapes.setColor(COLOR_WORLD_BACKGROUND);
-		shapes.rect(LEFT_PANEL_WIDTH, 0, viewportWidth, viewportHeight);
+		shapes.rect(getWorldScreenLeft(), getWorldScreenBottom(), viewportWidth, viewportHeight);
 		shapes.end();
 
 		Gdx.gl.glViewport(viewportX, viewportY, viewportWidth, viewportHeight);
@@ -855,7 +884,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			}
 		}
 		else{
-			shapes.rect(object.x, object.y, object.width, object.height);
+			drawRectangleFilled(object);
 		}
 	}
 
@@ -884,8 +913,24 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			}
 		}
 		else{
-			shapes.rect(object.x, object.y, object.width, object.height);
+			drawRectangleOutline(object);
 		}
+	}
+
+	private void drawRectangleFilled(EditorLevelObject object){
+		object.rectangleCorners(rectBottomLeft, rectBottomRight, rectTopRight, rectTopLeft);
+		shapes.triangle(rectBottomLeft.x, rectBottomLeft.y, rectBottomRight.x, rectBottomRight.y,
+				rectTopRight.x, rectTopRight.y);
+		shapes.triangle(rectBottomLeft.x, rectBottomLeft.y, rectTopRight.x, rectTopRight.y,
+				rectTopLeft.x, rectTopLeft.y);
+	}
+
+	private void drawRectangleOutline(EditorLevelObject object){
+		object.rectangleCorners(rectBottomLeft, rectBottomRight, rectTopRight, rectTopLeft);
+		shapes.line(rectBottomLeft.x, rectBottomLeft.y, rectBottomRight.x, rectBottomRight.y);
+		shapes.line(rectBottomRight.x, rectBottomRight.y, rectTopRight.x, rectTopRight.y);
+		shapes.line(rectTopRight.x, rectTopRight.y, rectTopLeft.x, rectTopLeft.y);
+		shapes.line(rectTopLeft.x, rectTopLeft.y, rectBottomLeft.x, rectBottomLeft.y);
 	}
 
 	private void drawPlacementGhost(){
@@ -909,24 +954,23 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		}
 		if(!canResizeByEdges(selectedObject))
 			return;
-		float minX = selectedObject.getMinX();
-		float maxX = selectedObject.getMaxX();
-		float minY = selectedObject.getMinY();
-		float maxY = selectedObject.getMaxY();
-		float centerX = (minX + maxX) / 2f;
-		float centerY = (minY + maxY) / 2f;
-		drawHandle(minX, minY, radius);
-		drawHandle(centerX, minY, radius);
-		drawHandle(maxX, minY, radius);
-		drawHandle(minX, centerY, radius);
-		drawHandle(maxX, centerY, radius);
-		drawHandle(minX, maxY, radius);
-		drawHandle(centerX, maxY, radius);
-		drawHandle(maxX, maxY, radius);
+		selectedObject.rectangleCorners(rectBottomLeft, rectBottomRight, rectTopRight, rectTopLeft);
+		drawHandle(rectBottomLeft.x, rectBottomLeft.y, radius);
+		drawMidHandle(rectBottomLeft, rectBottomRight, radius);
+		drawHandle(rectBottomRight.x, rectBottomRight.y, radius);
+		drawMidHandle(rectBottomLeft, rectTopLeft, radius);
+		drawMidHandle(rectBottomRight, rectTopRight, radius);
+		drawHandle(rectTopLeft.x, rectTopLeft.y, radius);
+		drawMidHandle(rectTopLeft, rectTopRight, radius);
+		drawHandle(rectTopRight.x, rectTopRight.y, radius);
 	}
 
 	private void drawHandle(float x, float y, float radius){
 		shapes.rect(x - radius, y - radius, radius * 2f, radius * 2f);
+	}
+
+	private void drawMidHandle(Vector2 first, Vector2 second, float radius){
+		drawHandle((first.x + second.x) / 2f, (first.y + second.y) / 2f, radius);
 	}
 
 	private void drawObjectLabels(){
@@ -937,28 +981,28 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		game.batch.begin();
 		editorFont.setColor(0.95f, 0.97f, 1f, 0.95f);
 		editorFont.draw(game.batch, labelObject.type.label,
-				LEFT_PANEL_WIDTH + (labelObject.getMinX() - cameraX) * zoom + 4f,
-				(labelObject.getMaxY() - cameraY) * zoom + 18f);
+				getWorldScreenLeft() + (labelObject.getMinX() - cameraX) * zoom + 4f,
+				getWorldScreenBottom() + (labelObject.getMaxY() - cameraY) * zoom + 18f);
 		editorFont.setColor(Color.WHITE);
 		game.batch.end();
 	}
 
 	private Color objectColor(EditorObjectType type){
 		if(type == EditorObjectType.START)
-			return COLOR_START;
+			return transparent(editorColors.getCouleurBalle(), START_ALPHA);
 		if(type == EditorObjectType.EXIT)
-			return COLOR_EXIT;
+			return transparent(editorColors.getCouleurExit(), EXIT_ALPHA);
 		if(type == EditorObjectType.WATER)
-			return COLOR_WATER;
+			return transparent(editorColors.getCouleurEau(), editorColors.getCouleurEau().a);
 		if(type == EditorObjectType.LIGHT || type == EditorObjectType.REVOLVING || type == EditorObjectType.SWING
 				|| type == EditorObjectType.BALANCOIRE || type == EditorObjectType.SUSPENDU || type == EditorObjectType.POULIE
 				|| type == EditorObjectType.PLATFORM)
-			return COLOR_DYNAMIC;
+			return transparent(editorColors.getCouleurLeger(), OBJECT_ALPHA);
 		if(type == EditorObjectType.SPRING)
-			return COLOR_SPRING;
+			return transparent(editorColors.getCouleurExit(), EXIT_ALPHA);
 		if(type == EditorObjectType.POLYGON)
-			return COLOR_POLYGON;
-		return COLOR_SOLID;
+			return transparent(editorColors.getCouleurSol(), OBJECT_ALPHA);
+		return transparent(editorColors.getCouleurSol(), OBJECT_ALPHA);
 	}
 
 	private int hitPointHandle(EditorLevelObject object, float worldX, float worldY){
@@ -981,16 +1025,13 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(!canResizeByEdges(object))
 			return false;
 		float tolerance = EDGE_SCREEN_TOLERANCE / Math.max(zoom, 0.01f);
-		float minX = object.getMinX();
-		float maxX = object.getMaxX();
-		float minY = object.getMinY();
-		float maxY = object.getMaxY();
-		boolean inHorizontalBand = worldX >= minX - tolerance && worldX <= maxX + tolerance;
-		boolean inVerticalBand = worldY >= minY - tolerance && worldY <= maxY + tolerance;
-		boolean nearLeft = Math.abs(worldX - minX) <= tolerance && inVerticalBand;
-		boolean nearRight = Math.abs(worldX - maxX) <= tolerance && inVerticalBand;
-		boolean nearBottom = Math.abs(worldY - minY) <= tolerance && inHorizontalBand;
-		boolean nearTop = Math.abs(worldY - maxY) <= tolerance && inHorizontalBand;
+		Vector2 local = object.worldToVisualLocal(worldX, worldY, scratch2);
+		boolean inHorizontalBand = local.x >= -tolerance && local.x <= object.width + tolerance;
+		boolean inVerticalBand = local.y >= -tolerance && local.y <= object.height + tolerance;
+		boolean nearLeft = Math.abs(local.x) <= tolerance && inVerticalBand;
+		boolean nearRight = Math.abs(local.x - object.width) <= tolerance && inVerticalBand;
+		boolean nearBottom = Math.abs(local.y) <= tolerance && inHorizontalBand;
+		boolean nearTop = Math.abs(local.y - object.height) <= tolerance && inHorizontalBand;
 		if(!nearLeft && !nearRight && !nearBottom && !nearTop)
 			return false;
 		if(nearLeft)
@@ -1007,24 +1048,58 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private void resizeSelectedObject(float worldX, float worldY){
 		if(selectedObject == null || !canResizeByEdges(selectedObject))
 			return;
+		if(selectedObject.usesRotatedRectangleGeometry()){
+			resizeRotatedSelectedObject(worldX, worldY);
+			return;
+		}
 		if(resizeHorizontal < 0){
 			float right = selectedObject.x + selectedObject.width;
-			float left = Math.min(snap(worldX), right - MIN_OBJECT_SIZE);
+			float left = Math.min(snapForSelected(worldX), right - MIN_OBJECT_SIZE);
 			selectedObject.x = left;
 			selectedObject.width = right - left;
 		}
 		else if(resizeHorizontal > 0){
-			selectedObject.width = Math.max(MIN_OBJECT_SIZE, snap(worldX) - selectedObject.x);
+			selectedObject.width = Math.max(MIN_OBJECT_SIZE, snapForSelected(worldX) - selectedObject.x);
 		}
 		if(resizeVertical < 0){
 			float top = selectedObject.y + selectedObject.height;
-			float bottom = Math.min(snap(worldY), top - MIN_OBJECT_SIZE);
+			float bottom = Math.min(snapForSelected(worldY), top - MIN_OBJECT_SIZE);
 			selectedObject.y = bottom;
 			selectedObject.height = top - bottom;
 		}
 		else if(resizeVertical > 0){
-			selectedObject.height = Math.max(MIN_OBJECT_SIZE, snap(worldY) - selectedObject.y);
+			selectedObject.height = Math.max(MIN_OBJECT_SIZE, snapForSelected(worldY) - selectedObject.y);
 		}
+	}
+
+	private void resizeRotatedSelectedObject(float worldX, float worldY){
+		selectedObject.worldToVisualLocal(worldX, worldY, scratch2);
+		float localX = snapLocalForSelected(scratch2.x);
+		float localY = snapLocalForSelected(scratch2.y);
+		if(resizeHorizontal < 0){
+			float delta = Math.min(localX, selectedObject.width - MIN_OBJECT_SIZE);
+			moveSelectedByVisualLocalDelta(delta, 0f);
+			selectedObject.width -= delta;
+		}
+		else if(resizeHorizontal > 0){
+			selectedObject.width = Math.max(MIN_OBJECT_SIZE, localX);
+		}
+		if(resizeVertical < 0){
+			float delta = Math.min(localY, selectedObject.height - MIN_OBJECT_SIZE);
+			moveSelectedByVisualLocalDelta(0f, delta);
+			selectedObject.height -= delta;
+		}
+		else if(resizeVertical > 0){
+			selectedObject.height = Math.max(MIN_OBJECT_SIZE, localY);
+		}
+	}
+
+	private void moveSelectedByVisualLocalDelta(float localX, float localY){
+		float angle = selectedObject.getVisualRotationDegrees() * MathUtils.degreesToRadians;
+		float cos = MathUtils.cos(angle);
+		float sin = MathUtils.sin(angle);
+		selectedObject.x += localX * cos - localY * sin;
+		selectedObject.y += localX * sin + localY * cos;
 	}
 
 	private boolean canResizeByEdges(EditorLevelObject object){
@@ -1033,13 +1108,15 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	}
 
 	private boolean isWorldScreen(int screenX, int screenY){
-		return screenX >= LEFT_PANEL_WIDTH && screenX <= Gdx.graphics.getWidth() - RIGHT_PANEL_WIDTH
-				&& screenY >= 0 && screenY <= Gdx.graphics.getHeight();
+		float stageY = Gdx.graphics.getHeight() - screenY;
+		return screenX >= getWorldScreenLeft() && screenX <= getWorldScreenRight()
+				&& stageY >= getWorldScreenBottom() && stageY <= getWorldScreenTop();
 	}
 
 	private Vector2 screenToWorld(int screenX, int screenY, Vector2 out){
 		float stageY = Gdx.graphics.getHeight() - screenY;
-		return out.set(cameraX + (screenX - LEFT_PANEL_WIDTH) / zoom, cameraY + stageY / zoom);
+		return out.set(cameraX + (screenX - getWorldScreenLeft()) / zoom,
+				cameraY + (stageY - getWorldScreenBottom()) / zoom);
 	}
 
 	private void updateHoverIfNeeded(){
@@ -1074,15 +1151,35 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private void updateWorldCamera(){
 		float viewportWidth = getWorldScreenWidth() / Math.max(zoom, 0.01f);
-		float viewportHeight = Math.max(1f, Gdx.graphics.getHeight()) / Math.max(zoom, 0.01f);
+		float viewportHeight = getWorldScreenHeight() / Math.max(zoom, 0.01f);
 		worldCamera.setToOrtho(false, viewportWidth, viewportHeight);
 		worldCamera.position.set(cameraX + viewportWidth / 2f, cameraY + viewportHeight / 2f, 0f);
 		worldCamera.update();
 		visibleWorldBounds.set(cameraX, cameraY, viewportWidth, viewportHeight);
 	}
 
+	private float getWorldScreenLeft(){
+		return SCREEN_MARGIN + LEFT_PANEL_WIDTH;
+	}
+
+	private float getWorldScreenRight(){
+		return Math.max(getWorldScreenLeft() + 1f, Gdx.graphics.getWidth() - SCREEN_MARGIN - RIGHT_PANEL_WIDTH);
+	}
+
+	private float getWorldScreenBottom(){
+		return SCREEN_MARGIN;
+	}
+
+	private float getWorldScreenTop(){
+		return Math.max(getWorldScreenBottom() + 1f, Gdx.graphics.getHeight() - SCREEN_MARGIN);
+	}
+
 	private float getWorldScreenWidth(){
-		return Math.max(1f, Gdx.graphics.getWidth() - LEFT_PANEL_WIDTH - RIGHT_PANEL_WIDTH);
+		return Math.max(1f, getWorldScreenRight() - getWorldScreenLeft());
+	}
+
+	private float getWorldScreenHeight(){
+		return Math.max(1f, getWorldScreenTop() - getWorldScreenBottom());
 	}
 
 	private boolean isVisible(EditorLevelObject object){
@@ -1103,9 +1200,10 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private void logLayout(int width, int height){
 		String message = "level editor layout screen=" + width + "x" + height + " panels="
 				+ Math.round(LEFT_PANEL_WIDTH) + "," + Math.round(RIGHT_PANEL_WIDTH)
+				+ " margin=" + Math.round(SCREEN_MARGIN)
 				+ " buttonHeight=" + BUTTON_HEIGHT + " fieldHeight=" + FIELD_HEIGHT
 				+ " fontScale=" + number(EDITOR_FONT_SCALE)
-				+ " worldViewport=" + Math.round(getWorldScreenWidth()) + "x" + height;
+				+ " worldViewport=" + Math.round(getWorldScreenWidth()) + "x" + Math.round(getWorldScreenHeight());
 		if(message.equals(lastLayoutLog))
 			return;
 		lastLayoutLog = message;
@@ -1140,6 +1238,22 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(type == EditorObjectType.PLATFORM)
 			return new String[]{"Speed", "Width", "Loop"};
 		return new String[0];
+	}
+
+	private Color transparent(Color base, float alpha){
+		return objectColorScratch.set(base.r, base.g, base.b, alpha);
+	}
+
+	private String snapLabel(EditorLevelObject object){
+		return object.snapMode == SnapMode.GRID ? "Snap: Grid" : "Snap: Free";
+	}
+
+	private float snapForSelected(float value){
+		return selectedObject != null && selectedObject.snapMode == SnapMode.GRID ? snap(value) : value;
+	}
+
+	private float snapLocalForSelected(float value){
+		return selectedObject != null && selectedObject.snapMode == SnapMode.GRID ? snap(value) : value;
 	}
 
 	private float snap(float value){

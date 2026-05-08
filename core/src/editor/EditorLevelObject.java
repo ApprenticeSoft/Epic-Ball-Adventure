@@ -1,10 +1,17 @@
 package editor;
 
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
 
 public class EditorLevelObject {
+	public enum SnapMode {
+		GRID,
+		FREE
+	}
+
+	private static final float ROTATION_EPSILON = 0.0001f;
 	private static int nextRuntimeId = 1;
 
 	public final int runtimeId;
@@ -14,6 +21,7 @@ public class EditorLevelObject {
 	public float width;
 	public float height;
 	public float rotation;
+	public SnapMode snapMode = SnapMode.GRID;
 	public final ObjectMap<String, String> properties = new ObjectMap<String, String>();
 	public final Array<Vector2> points = new Array<Vector2>();
 	private boolean boundsDirty = true;
@@ -34,6 +42,7 @@ public class EditorLevelObject {
 	public EditorLevelObject copy(){
 		EditorLevelObject copy = new EditorLevelObject(type, x + 32f, y + 32f, width, height);
 		copy.rotation = rotation;
+		copy.snapMode = snapMode;
 		for(ObjectMap.Entry<String, String> entry : properties)
 			copy.properties.put(entry.key, entry.value);
 		for(Vector2 point : points)
@@ -47,6 +56,8 @@ public class EditorLevelObject {
 			return containsPolygon(worldX - x, worldY - y);
 		if(type == EditorObjectType.PLATFORM)
 			return distanceToPolylineSquared(worldX - x, worldY - y) <= 18f * 18f;
+		if(usesRotatedRectangleGeometry())
+			return containsRotatedRectangle(worldX, worldY);
 		return worldX >= getMinX() && worldX <= getMaxX() && worldY >= getMinY() && worldY <= getMaxY();
 	}
 
@@ -158,29 +169,118 @@ public class EditorLevelObject {
 	public float getMinX(){
 		if(usesPointGeometry())
 			return x + localMinX();
+		if(usesRotatedRectangleGeometry())
+			return minRotatedX();
 		return Math.min(x, x + width);
 	}
 
 	public float getMaxX(){
 		if(usesPointGeometry())
 			return x + localMaxX();
+		if(usesRotatedRectangleGeometry())
+			return maxRotatedX();
 		return Math.max(x, x + width);
 	}
 
 	public float getMinY(){
 		if(usesPointGeometry())
 			return y + localMinY();
+		if(usesRotatedRectangleGeometry())
+			return minRotatedY();
 		return Math.min(y, y + height);
 	}
 
 	public float getMaxY(){
 		if(usesPointGeometry())
 			return y + localMaxY();
+		if(usesRotatedRectangleGeometry())
+			return maxRotatedY();
 		return Math.max(y, y + height);
 	}
 
-	private boolean usesPointGeometry(){
+	public boolean usesPointGeometry(){
 		return type == EditorObjectType.POLYGON || type == EditorObjectType.PLATFORM;
+	}
+
+	public boolean usesRotatedRectangleGeometry(){
+		return !usesPointGeometry() && Math.abs(rotation) > ROTATION_EPSILON;
+	}
+
+	public float getVisualDrawX(){
+		if(!usesRotatedRectangleGeometry())
+			return x;
+		float halfWidth = width / 2f;
+		float halfHeight = height / 2f;
+		float angle = getVisualAngleRadians();
+		return x - halfWidth + halfWidth * MathUtils.cos(angle) + halfHeight * MathUtils.sin(angle);
+	}
+
+	public float getVisualDrawY(){
+		if(!usesRotatedRectangleGeometry())
+			return y;
+		float halfWidth = width / 2f;
+		float halfHeight = height / 2f;
+		float angle = getVisualAngleRadians();
+		return y + halfHeight + halfWidth * MathUtils.sin(angle) - halfHeight * MathUtils.cos(angle);
+	}
+
+	public float getVisualCenterX(){
+		return getVisualDrawX() + width / 2f;
+	}
+
+	public float getVisualCenterY(){
+		return getVisualDrawY() + height / 2f;
+	}
+
+	public float getVisualRotationDegrees(){
+		return -rotation;
+	}
+
+	public void rectangleCorners(Vector2 bottomLeft, Vector2 bottomRight, Vector2 topRight, Vector2 topLeft){
+		float drawX = getVisualDrawX();
+		float drawY = getVisualDrawY();
+		visualLocalToWorld(0f, 0f, bottomLeft);
+		visualLocalToWorld(width, 0f, bottomRight);
+		visualLocalToWorld(width, height, topRight);
+		visualLocalToWorld(0f, height, topLeft);
+		if(!usesRotatedRectangleGeometry()){
+			bottomLeft.set(drawX, drawY);
+			bottomRight.set(drawX + width, drawY);
+			topRight.set(drawX + width, drawY + height);
+			topLeft.set(drawX, drawY + height);
+		}
+	}
+
+	public Vector2 visualLocalToWorld(float localX, float localY, Vector2 out){
+		float drawX = getVisualDrawX();
+		float drawY = getVisualDrawY();
+		if(!usesRotatedRectangleGeometry())
+			return out.set(drawX + localX, drawY + localY);
+		float centerX = drawX + width / 2f;
+		float centerY = drawY + height / 2f;
+		float dx = drawX + localX - centerX;
+		float dy = drawY + localY - centerY;
+		float angle = getVisualAngleRadians();
+		float cos = MathUtils.cos(angle);
+		float sin = MathUtils.sin(angle);
+		return out.set(centerX + dx * cos - dy * sin, centerY + dx * sin + dy * cos);
+	}
+
+	public Vector2 worldToVisualLocal(float worldX, float worldY, Vector2 out){
+		float drawX = getVisualDrawX();
+		float drawY = getVisualDrawY();
+		if(!usesRotatedRectangleGeometry())
+			return out.set(worldX - drawX, worldY - drawY);
+		float centerX = drawX + width / 2f;
+		float centerY = drawY + height / 2f;
+		float dx = worldX - centerX;
+		float dy = worldY - centerY;
+		float angle = -getVisualAngleRadians();
+		float cos = MathUtils.cos(angle);
+		float sin = MathUtils.sin(angle);
+		float unrotatedX = centerX + dx * cos - dy * sin;
+		float unrotatedY = centerY + dx * sin + dy * cos;
+		return out.set(unrotatedX - drawX, unrotatedY - drawY);
 	}
 
 	private boolean containsPolygon(float localX, float localY){
@@ -294,6 +394,80 @@ public class EditorLevelObject {
 		float dx = ax - bx;
 		float dy = ay - by;
 		return dx * dx + dy * dy;
+	}
+
+	private boolean containsRotatedRectangle(float worldX, float worldY){
+		float drawX = getVisualDrawX();
+		float drawY = getVisualDrawY();
+		float centerX = drawX + width / 2f;
+		float centerY = drawY + height / 2f;
+		float dx = worldX - centerX;
+		float dy = worldY - centerY;
+		float inverseAngle = -getVisualAngleRadians();
+		float cos = MathUtils.cos(inverseAngle);
+		float sin = MathUtils.sin(inverseAngle);
+		float unrotatedX = centerX + dx * cos - dy * sin;
+		float unrotatedY = centerY + dx * sin + dy * cos;
+		return unrotatedX >= drawX && unrotatedX <= drawX + width
+				&& unrotatedY >= drawY && unrotatedY <= drawY + height;
+	}
+
+	private float minRotatedX(){
+		float a = rotatedX(0f, 0f);
+		float b = rotatedX(width, 0f);
+		float c = rotatedX(width, height);
+		float d = rotatedX(0f, height);
+		return Math.min(Math.min(a, b), Math.min(c, d));
+	}
+
+	private float maxRotatedX(){
+		float a = rotatedX(0f, 0f);
+		float b = rotatedX(width, 0f);
+		float c = rotatedX(width, height);
+		float d = rotatedX(0f, height);
+		return Math.max(Math.max(a, b), Math.max(c, d));
+	}
+
+	private float minRotatedY(){
+		float a = rotatedY(0f, 0f);
+		float b = rotatedY(width, 0f);
+		float c = rotatedY(width, height);
+		float d = rotatedY(0f, height);
+		return Math.min(Math.min(a, b), Math.min(c, d));
+	}
+
+	private float maxRotatedY(){
+		float a = rotatedY(0f, 0f);
+		float b = rotatedY(width, 0f);
+		float c = rotatedY(width, height);
+		float d = rotatedY(0f, height);
+		return Math.max(Math.max(a, b), Math.max(c, d));
+	}
+
+	private float rotatedX(float localX, float localY){
+		float drawX = getVisualDrawX();
+		float drawY = getVisualDrawY();
+		float centerX = drawX + width / 2f;
+		float centerY = drawY + height / 2f;
+		float dx = drawX + localX - centerX;
+		float dy = drawY + localY - centerY;
+		float angle = getVisualAngleRadians();
+		return centerX + dx * MathUtils.cos(angle) - dy * MathUtils.sin(angle);
+	}
+
+	private float rotatedY(float localX, float localY){
+		float drawX = getVisualDrawX();
+		float drawY = getVisualDrawY();
+		float centerX = drawX + width / 2f;
+		float centerY = drawY + height / 2f;
+		float dx = drawX + localX - centerX;
+		float dy = drawY + localY - centerY;
+		float angle = getVisualAngleRadians();
+		return centerY + dx * MathUtils.sin(angle) + dy * MathUtils.cos(angle);
+	}
+
+	private float getVisualAngleRadians(){
+		return -rotation * MathUtils.degreesToRadians;
 	}
 
 	private void markBoundsDirty(){
