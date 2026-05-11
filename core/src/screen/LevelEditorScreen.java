@@ -32,6 +32,7 @@ import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.Touchable;
+import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
@@ -66,7 +67,6 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private static final float MIN_OBJECT_SIZE = 16f;
 	private static final int GRID_MINOR_STEP = EditorLevel.TILE_SIZE;
 	private static final int GRID_MAJOR_STEP = EditorLevel.TILE_SIZE * 4;
-	private static final Color COLOR_BACKGROUND = new Color(0.08f, 0.09f, 0.10f, 1f);
 	private static final Color COLOR_WORLD_BACKGROUND = new Color(0.10f, 0.11f, 0.12f, 1f);
 	private static final Color COLOR_LEVEL_BACKGROUND = new Color(0.13f, 0.14f, 0.15f, 1f);
 	private static final Color COLOR_GRID_MINOR = new Color(0.20f, 0.22f, 0.24f, 0.50f);
@@ -93,6 +93,9 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private final Vector2 rectTopLeft = new Vector2();
 	private final Rectangle visibleWorldBounds = new Rectangle();
 	private final Color objectColorScratch = new Color();
+	private final EditorLevelObject placementPreview = new EditorLevelObject(EditorObjectType.SOLID, 0f, 0f, 1f, 1f);
+	private final EditorLevelObject placementPreviewPair = new EditorLevelObject(EditorObjectType.POULIE, 0f, 0f, 1f, 1f);
+	private final ObjectMap<EditorObjectType, TextButton> paletteButtons = new ObjectMap<EditorObjectType, TextButton>();
 
 	private Texture uiTexture;
 	private Drawable panelDrawable;
@@ -105,6 +108,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private Label.LabelStyle titleStyle;
 	private TextButton.TextButtonStyle buttonStyle;
 	private TextField.TextFieldStyle textFieldStyle;
+	private CheckBox.CheckBoxStyle checkBoxStyle;
 	private BitmapFont editorFont;
 
 	private Table leftTable;
@@ -165,7 +169,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	public void render(float delta) {
 		updateCamera(delta);
 		updateHoverIfNeeded();
-		Gdx.gl.glClearColor(COLOR_BACKGROUND.r, COLOR_BACKGROUND.g, COLOR_BACKGROUND.b, COLOR_BACKGROUND.a);
+		Color marginColor = editorColors.getCouleurSol();
+		Gdx.gl.glClearColor(marginColor.r, marginColor.g, marginColor.b, 1f);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		drawWorld();
 		stage.act(delta);
@@ -255,8 +260,9 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		dragMode = DragMode.NONE;
 		draggedPointIndex = -1;
 		if(activePaletteType != null){
-			placeObject(activePaletteType, world.x, world.y);
-			activePaletteType = null;
+			EditorObjectType placementType = activePaletteType;
+			placeObject(placementType, world.x, world.y);
+			setActivePaletteType(null);
 			markHoverDirty();
 			return true;
 		}
@@ -382,6 +388,19 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		buttonStyle.up = buttonDrawable;
 		buttonStyle.down = buttonDownDrawable;
 		buttonStyle.checked = buttonDownDrawable;
+
+		Drawable checkboxOffDrawable = tint(white, new Color(0.07f, 0.08f, 0.09f, 1f));
+		checkboxOffDrawable.setMinWidth(18f);
+		checkboxOffDrawable.setMinHeight(18f);
+		Drawable checkboxOnDrawable = tint(white, new Color(0.13f, 0.55f, 0.72f, 1f));
+		checkboxOnDrawable.setMinWidth(18f);
+		checkboxOnDrawable.setMinHeight(18f);
+
+		checkBoxStyle = new CheckBox.CheckBoxStyle();
+		checkBoxStyle.checkboxOff = checkboxOffDrawable;
+		checkBoxStyle.checkboxOn = checkboxOnDrawable;
+		checkBoxStyle.font = editorFont;
+		checkBoxStyle.fontColor = Color.WHITE;
 
 		textFieldStyle = new TextField.TextFieldStyle();
 		textFieldStyle.font = editorFont;
@@ -550,15 +569,28 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			});
 			String[] propertyNames = propertyNames(selectedObject.type);
 			for(final String propertyName : propertyNames){
-				addTextField(leftTable, propertyName, selectedObject.properties.get(propertyName), new TextSetter() {
-					@Override
-					public void set(String value) {
-						if(value == null || value.trim().length() == 0)
-							selectedObject.properties.remove(propertyName);
-						else
-							selectedObject.properties.put(propertyName, value);
-					}
-				});
+				if("Loop".equals(propertyName)){
+					addBooleanField(leftTable, propertyName, selectedObject.properties.get(propertyName) != null, new BooleanSetter() {
+						@Override
+						public void set(boolean value) {
+							if(value)
+								selectedObject.properties.put(propertyName, "true");
+							else
+								selectedObject.properties.remove(propertyName);
+						}
+					});
+				}
+				else{
+					addTextField(leftTable, propertyName, selectedObject.properties.get(propertyName), new TextSetter() {
+						@Override
+						public void set(String value) {
+							if(value == null || value.trim().length() == 0)
+								selectedObject.properties.remove(propertyName);
+							else
+								selectedObject.properties.put(propertyName, value);
+						}
+					});
+				}
 			}
 			TextButton duplicateButton = addButton(leftTable, "Duplicate");
 			duplicateButton.addListener(new ChangeListener() {
@@ -582,6 +614,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private void buildRightPanel(){
 		rightTable.clear();
+		paletteButtons.clear();
 		rightTable.defaults().pad(3f).left().growX();
 		addTitle(rightTable, "OBJECTS");
 		addPaletteButton(EditorObjectType.START, "Start");
@@ -601,17 +634,19 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private void addPaletteButton(final EditorObjectType type, String label){
 		TextButton button = addButton(rightTable, label);
+		paletteButtons.put(type, button);
+		button.setChecked(type == activePaletteType);
 		button.addListener(new ClickListener() {
 			@Override
 			public void clicked(InputEvent event, float x, float y) {
-				activePaletteType = type;
+				setActivePaletteType(type);
 				setStatus(type.label + " selected");
 			}
 		});
 		button.addListener(new DragListener() {
 			@Override
 			public void dragStart(InputEvent event, float x, float y, int pointer) {
-				activePaletteType = type;
+				setActivePaletteType(type);
 			}
 
 			@Override
@@ -619,7 +654,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 				Vector2 stagePosition = scratch2.set(x, y);
 				event.getListenerActor().localToStageCoordinates(stagePosition);
 				if(placeFromStage(stagePosition.x, stagePosition.y))
-					activePaletteType = null;
+					setActivePaletteType(null);
 			}
 		});
 	}
@@ -698,6 +733,21 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		});
 	}
 
+	private CheckBox addBooleanField(Table table, String labelText, boolean value, final BooleanSetter setter){
+		final CheckBox checkBox = new CheckBox(" " + labelText, checkBoxStyle);
+		checkBox.getLabel().setFontScale(EDITOR_FONT_SCALE * 0.92f);
+		checkBox.setChecked(value);
+		checkBox.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				setter.set(checkBox.isChecked());
+			}
+		});
+		table.add(checkBox).height(FIELD_HEIGHT).growX();
+		table.row();
+		return checkBox;
+	}
+
 	private void saveLevel(){
 		try{
 			String xml = EditorTmxWriter.write(level);
@@ -769,6 +819,13 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			statusLabel.setText(value);
 	}
 
+	private void setActivePaletteType(EditorObjectType type){
+		activePaletteType = type;
+		for(ObjectMap.Entry<EditorObjectType, TextButton> entry : paletteButtons)
+			entry.value.setChecked(entry.key == type);
+		markHoverDirty();
+	}
+
 	private void updateCamera(float delta){
 		boolean cameraMoved = panLeft || panRight || panUp || panDown;
 		if(!cameraMoved)
@@ -820,7 +877,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		for(EditorLevelObject object : level.objects)
 			if(isVisible(object))
 				drawObjectFilled(object);
-		drawPlacementGhost();
+		drawPlacementGhostFilled();
 		shapes.end();
 
 		shapes.begin(ShapeRenderer.ShapeType.Line);
@@ -830,6 +887,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		for(EditorLevelObject object : level.objects)
 			if(isVisible(object))
 				drawObjectOutline(object, object == selectedObject);
+		drawPlacementGhostOutline();
 		shapes.end();
 		shapes.begin(ShapeRenderer.ShapeType.Filled);
 		drawSelectedHandles();
@@ -875,13 +933,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			}
 		}
 		else if(object.type == EditorObjectType.PLATFORM){
-			object.ensureDefaultPoints();
-			for(int i = 0; i < object.points.size - 1; i++){
-				Vector2 first = object.points.get(i);
-				Vector2 second = object.points.get(i + 1);
-				shapes.rectLine(object.x + first.x, object.y + first.y, object.x + second.x, object.y + second.y,
-						8f / Math.max(zoom, 0.01f));
-			}
+			drawPlatformFilled(object);
 		}
 		else{
 			drawRectangleFilled(object);
@@ -905,12 +957,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			}
 		}
 		else if(object.type == EditorObjectType.PLATFORM){
-			object.ensureDefaultPoints();
-			for(int i = 0; i < object.points.size - 1; i++){
-				Vector2 first = object.points.get(i);
-				Vector2 second = object.points.get(i + 1);
-				shapes.line(object.x + first.x, object.y + first.y, object.x + second.x, object.y + second.y);
-			}
+			drawPlatformOutline(object);
 		}
 		else{
 			drawRectangleOutline(object);
@@ -933,12 +980,71 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		shapes.line(rectTopLeft.x, rectTopLeft.y, rectBottomLeft.x, rectBottomLeft.y);
 	}
 
-	private void drawPlacementGhost(){
-		if(activePaletteType == null || !isWorldScreen(Gdx.input.getX(), Gdx.input.getY()))
+	private void drawPlatformFilled(EditorLevelObject object){
+		object.ensureDefaultPoints();
+		for(int i = 0; i < object.points.size - 1; i++){
+			Vector2 first = object.points.get(i);
+			Vector2 second = object.points.get(i + 1);
+			shapes.rectLine(object.x + first.x, object.y + first.y, object.x + second.x, object.y + second.y,
+					8f / Math.max(zoom, 0.01f));
+		}
+		shapes.setColor(platformFootprintColor(OBJECT_ALPHA * 0.68f));
+		drawPlatformFootprint(object);
+		shapes.setColor(objectColor(object.type));
+	}
+
+	private void drawPlatformOutline(EditorLevelObject object){
+		object.ensureDefaultPoints();
+		for(int i = 0; i < object.points.size - 1; i++){
+			Vector2 first = object.points.get(i);
+			Vector2 second = object.points.get(i + 1);
+			shapes.line(object.x + first.x, object.y + first.y, object.x + second.x, object.y + second.y);
+		}
+		drawPlatformFootprint(object);
+	}
+
+	private void drawPlatformFootprint(EditorLevelObject object){
+		if(object.points.size == 0)
 			return;
+		float width = platformPixelWidth(object);
+		float height = EditorLevel.TILE_SIZE;
+		Vector2 point = object.points.first();
+		float x = object.x + point.x - width / 2f;
+		float y = object.y + point.y - height / 2f;
+		shapes.rect(x, y, width, height);
+	}
+
+	private void drawPlacementGhostFilled(){
+		if(!preparePlacementPreview())
+			return;
+		drawObjectFilled(placementPreview);
+		if(activePaletteType == EditorObjectType.POULIE)
+			drawObjectFilled(placementPreviewPair);
+	}
+
+	private void drawPlacementGhostOutline(){
+		if(!preparePlacementPreview())
+			return;
+		shapes.setColor(COLOR_SELECTED);
+		drawObjectOutline(placementPreview, true);
+		if(activePaletteType == EditorObjectType.POULIE)
+			drawObjectOutline(placementPreviewPair, true);
+	}
+
+	private boolean preparePlacementPreview(){
+		if(activePaletteType == null || !isWorldScreen(Gdx.input.getX(), Gdx.input.getY()))
+			return false;
 		Vector2 world = screenToWorld(Gdx.input.getX(), Gdx.input.getY(), scratch);
-		shapes.setColor(1f, 1f, 1f, 0.22f);
-		shapes.circle(world.x, world.y, 20f / Math.max(zoom, 0.01f), 20);
+		float centerX = snap(world.x);
+		float centerY = snap(world.y);
+		if(activePaletteType == EditorObjectType.POULIE){
+			placementPreview.reset(EditorObjectType.POULIE, snap(centerX - 144f), snap(centerY), 96f, 32f);
+			placementPreviewPair.reset(EditorObjectType.POULIE, snap(centerX + 48f), snap(centerY), 96f, 32f);
+		}
+		else{
+			level.configureObject(placementPreview, activePaletteType, centerX, centerY);
+		}
+		return true;
 	}
 
 	private void drawSelectedHandles(){
@@ -1002,7 +1108,19 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			return transparent(editorColors.getCouleurExit(), EXIT_ALPHA);
 		if(type == EditorObjectType.POLYGON)
 			return transparent(editorColors.getCouleurSol(), OBJECT_ALPHA);
-		return transparent(editorColors.getCouleurSol(), OBJECT_ALPHA);
+		return solidObjectColor(OBJECT_ALPHA);
+	}
+
+	private Color solidObjectColor(float alpha){
+		return transparent(editorColors.getCouleurSol(), alpha);
+	}
+
+	private Color platformFootprintColor(float alpha){
+		return transparent(editorColors.getCouleurLeger(), alpha);
+	}
+
+	private float platformPixelWidth(EditorLevelObject object){
+		return Math.max(EditorLevel.TILE_SIZE, propertyFloat(object, "Width", 2f) * EditorLevel.TILE_SIZE);
 	}
 
 	private int hitPointHandle(EditorLevelObject object, float worldX, float worldY){
@@ -1240,6 +1358,18 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		return new String[0];
 	}
 
+	private float propertyFloat(EditorLevelObject object, String propertyName, float fallback){
+		String value = object.properties.get(propertyName);
+		if(value == null)
+			return fallback;
+		try{
+			return Float.parseFloat(value);
+		}
+		catch(NumberFormatException ignored){
+			return fallback;
+		}
+	}
+
 	private Color transparent(Color base, float alpha){
 		return objectColorScratch.set(base.r, base.g, base.b, alpha);
 	}
@@ -1276,5 +1406,9 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private interface IntSetter {
 		void set(int value);
+	}
+
+	private interface BooleanSetter {
+		void set(boolean value);
 	}
 }

@@ -39,6 +39,19 @@ public class EditorLevelObject {
 		this.height = height;
 	}
 
+	public void reset(EditorObjectType type, float x, float y, float width, float height){
+		this.type = type;
+		this.x = x;
+		this.y = y;
+		this.width = width;
+		this.height = height;
+		rotation = 0f;
+		snapMode = SnapMode.GRID;
+		properties.clear();
+		points.clear();
+		markBoundsDirty();
+	}
+
 	public EditorLevelObject copy(){
 		EditorLevelObject copy = new EditorLevelObject(type, x + 32f, y + 32f, width, height);
 		copy.rotation = rotation;

@@ -23,68 +23,73 @@ public class EditorLevel {
 	}
 
 	public EditorLevelObject createObject(EditorObjectType type, float centerX, float centerY){
-		EditorLevelObject object;
-		if(type == EditorObjectType.START){
+		if(type == EditorObjectType.START)
 			removeObjectsOfType(EditorObjectType.START);
-			object = new EditorLevelObject(type, snap(centerX - 16f), snap(centerY - 16f), 32f, 32f);
+		EditorLevelObject object = new EditorLevelObject(type, 0f, 0f, 1f, 1f);
+		configureObject(object, type, centerX, centerY);
+		objects.add(object);
+		return object;
+	}
+
+	public void configureObject(EditorLevelObject object, EditorObjectType type, float centerX, float centerY){
+		if(type == EditorObjectType.START){
+			object.reset(type, snap(centerX - 16f), snap(centerY - 16f), 32f, 32f);
 		}
 		else if(type == EditorObjectType.EXIT){
-			object = new EditorLevelObject(type, snap(centerX - 32f), snap(centerY - 32f), 64f, 64f);
+			object.reset(type, snap(centerX - 32f), snap(centerY - 32f), 64f, 64f);
 		}
 		else if(type == EditorObjectType.WATER){
-			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY - 64f), 256f, 128f);
+			object.reset(type, snap(centerX - 128f), snap(centerY - 64f), 256f, 128f);
 		}
 		else if(type == EditorObjectType.SPRING){
-			object = new EditorLevelObject(type, snap(centerX - 32f), snap(centerY - 48f), 64f, 96f);
+			object.reset(type, snap(centerX - 32f), snap(centerY - 48f), 64f, 96f);
 			object.properties.put("PowerX", "0");
 			object.properties.put("PowerY", "60");
 		}
 		else if(type == EditorObjectType.LIGHT){
-			object = new EditorLevelObject(type, snap(centerX - 32f), snap(centerY - 32f), 64f, 64f);
+			object.reset(type, snap(centerX - 32f), snap(centerY - 32f), 64f, 64f);
 			object.properties.put("Weight", "0.8");
 		}
 		else if(type == EditorObjectType.REVOLVING){
-			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);
+			object.reset(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);
 			object.properties.put("Speed", "15");
 		}
 		else if(type == EditorObjectType.SWING){
-			object = new EditorLevelObject(type, snap(centerX - 360f), snap(centerY - 16f), 720f, 32f);
+			object.reset(type, snap(centerX - 360f), snap(centerY - 16f), 720f, 32f);
 			object.properties.put("Position", "0");
 			object.properties.put("Weight", "15");
 		}
 		else if(type == EditorObjectType.BALANCOIRE){
-			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);
+			object.reset(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);
 			object.properties.put("AttacheY", "10");
 			object.properties.put("Weight", "5");
 		}
 		else if(type == EditorObjectType.SUSPENDU){
-			object = new EditorLevelObject(type, snap(centerX - 32f), snap(centerY - 32f), 64f, 64f);
+			object.reset(type, snap(centerX - 32f), snap(centerY - 32f), 64f, 64f);
 			object.properties.put("Length", "5");
 			object.properties.put("Position", "1");
 			object.properties.put("Weight", "5");
 		}
 		else if(type == EditorObjectType.POULIE){
-			object = new EditorLevelObject(type, snap(centerX - 48f), snap(centerY - 16f), 96f, 32f);
+			object.reset(type, snap(centerX - 48f), snap(centerY - 16f), 96f, 32f);
 			int group = nextPulleyGroup();
 			object.properties.put("Groupe", String.valueOf(group));
 			object.properties.put("Masse", "50");
 			object.properties.put("longueur", "5");
 		}
 		else if(type == EditorObjectType.PLATFORM){
-			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY), 256f, 0f);
+			object.reset(type, snap(centerX - 128f), snap(centerY), 256f, 0f);
 			object.ensureDefaultPoints();
 			object.properties.put("Speed", "5");
 			object.properties.put("Width", "2");
 		}
 		else if(type == EditorObjectType.POLYGON){
-			object = new EditorLevelObject(type, snap(centerX - 96f), snap(centerY - 64f), 192f, 128f);
+			object.reset(type, snap(centerX - 96f), snap(centerY - 64f), 192f, 128f);
 			object.ensureDefaultPoints();
 		}
 		else{
-			object = new EditorLevelObject(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);
+			object.reset(type, snap(centerX - 128f), snap(centerY - 16f), 256f, 32f);
 		}
-		objects.add(object);
-		return object;
 	}
 
 	public Array<EditorLevelObject> createPulleyPair(float centerX, float centerY){
