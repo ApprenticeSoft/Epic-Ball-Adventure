@@ -2,15 +2,19 @@ package screen;
 
 import editor.EditorFileBridge;
 import editor.EditorLevel;
+import editor.EditorLevelValidator;
 import editor.EditorLevelObject;
 import editor.EditorLevelObject.SnapMode;
 import editor.EditorObjectType;
+import editor.EditorTmxReader;
 import editor.EditorTiledMapFactory;
 import editor.EditorTmxWriter;
 import utils.DebugConfig;
+import utils.EditorBrowserBridge;
 import utils.Variables;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input.Buttons;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.InputMultiplexer;
@@ -44,6 +48,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.scenes.scene2d.utils.DragListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.one.button.jam.Couleurs;
@@ -65,6 +70,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private static final float HANDLE_SCREEN_RADIUS = 7f;
 	private static final float EDGE_SCREEN_TOLERANCE = 9f;
 	private static final float MIN_OBJECT_SIZE = 16f;
+	private static final int MAX_UNDO_STATES = 80;
 	private static final int GRID_MINOR_STEP = EditorLevel.TILE_SIZE;
 	private static final int GRID_MAJOR_STEP = EditorLevel.TILE_SIZE * 4;
 	private static final Color COLOR_WORLD_BACKGROUND = new Color(0.10f, 0.11f, 0.12f, 1f);
@@ -122,7 +128,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		NONE,
 		MOVE,
 		RESIZE_RECT,
-		DRAG_POINT
+		DRAG_POINT,
+		PAN
 	}
 
 	private float cameraX;
@@ -138,6 +145,9 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private int resizeHorizontal;
 	private int resizeVertical;
 	private int draggedPointIndex = -1;
+	private int panDragLastScreenX;
+	private int panDragLastScreenY;
+	private boolean dragUndoRecorded;
 	private EditorLevelObject selectedObject;
 	private EditorLevelObject hoveredObject;
 	private EditorObjectType activePaletteType;
@@ -149,6 +159,20 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private float lastHoverCameraX;
 	private float lastHoverCameraY;
 	private float lastHoverZoom;
+	private final Array<EditorSnapshot> undoStack = new Array<EditorSnapshot>();
+	private final Array<EditorSnapshot> redoStack = new Array<EditorSnapshot>();
+
+	private static class EditorSnapshot {
+		final EditorLevel level;
+		final int selectedIndex;
+		final String action;
+
+		EditorSnapshot(EditorLevel level, int selectedIndex, String action){
+			this.level = level;
+			this.selectedIndex = selectedIndex;
+			this.action = action;
+		}
+	}
 
 	public LevelEditorScreen(final MyGdxGame game){
 		this.game = game;
@@ -161,6 +185,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public void show() {
+		EditorBrowserBridge.setEditorShortcutsActive(true);
 		Gdx.graphics.setContinuousRendering(true);
 		Gdx.input.setInputProcessor(new InputMultiplexer(stage, this));
 	}
@@ -191,6 +216,14 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public boolean keyDown(int keycode) {
+		if(isControlPressed() && keycode == Keys.Z){
+			undo();
+			return true;
+		}
+		if(isControlPressed() && keycode == Keys.Y){
+			redo();
+			return true;
+		}
 		if(keycode == Keys.ESCAPE){
 			game.setScreen(new MainMenuScreen(game));
 			dispose();
@@ -259,6 +292,13 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		Vector2 world = screenToWorld(screenX, screenY, scratch);
 		dragMode = DragMode.NONE;
 		draggedPointIndex = -1;
+		dragUndoRecorded = false;
+		if(button == Buttons.RIGHT){
+			dragMode = DragMode.PAN;
+			panDragLastScreenX = screenX;
+			panDragLastScreenY = screenY;
+			return true;
+		}
 		if(activePaletteType != null){
 			EditorObjectType placementType = activePaletteType;
 			placeObject(placementType, world.x, world.y);
@@ -293,17 +333,24 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public boolean touchDragged(int screenX, int screenY, int pointer) {
+		if(dragMode == DragMode.PAN){
+			panByMouseDrag(screenX, screenY);
+			return true;
+		}
 		if(dragMode == DragMode.NONE || selectedObject == null)
 			return false;
 		Vector2 world = screenToWorld(screenX, screenY, scratch);
 		if(dragMode == DragMode.MOVE){
+			recordDragUndo("Move object");
 			selectedObject.x = snapForSelected(world.x - dragOffsetX);
 			selectedObject.y = snapForSelected(world.y - dragOffsetY);
 		}
 		else if(dragMode == DragMode.RESIZE_RECT){
+			recordDragUndo("Resize object");
 			resizeSelectedObject(world.x, world.y);
 		}
 		else if(dragMode == DragMode.DRAG_POINT){
+			recordDragUndo("Move point");
 			selectedObject.setPointWorldPosition(draggedPointIndex, snapForSelected(world.x), snapForSelected(world.y));
 		}
 		markHoverDirty();
@@ -313,11 +360,14 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	@Override
 	public boolean touchUp(int screenX, int screenY, int pointer, int button) {
 		if(dragMode != DragMode.NONE){
+			boolean editedObject = dragMode != DragMode.PAN;
 			dragMode = DragMode.NONE;
 			draggedPointIndex = -1;
 			resizeHorizontal = 0;
 			resizeVertical = 0;
-			buildLeftPanel();
+			dragUndoRecorded = false;
+			if(editedObject)
+				buildLeftPanel();
 			updateHover(screenX, screenY);
 			logCamera();
 			return true;
@@ -343,10 +393,12 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public void hide() {
+		EditorBrowserBridge.setEditorShortcutsActive(false);
 	}
 
 	@Override
 	public void dispose() {
+		EditorBrowserBridge.setEditorShortcutsActive(false);
 		stage.dispose();
 		shapes.dispose();
 		if(editorFont != null)
@@ -452,19 +504,26 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		fileNameField = addTextField(leftTable, "File", level.fileName, new TextSetter() {
 			@Override
 			public void set(String value) {
+				recordUndo("Edit file name");
 				level.fileName = value;
 			}
 		});
 		widthField = addIntegerField(leftTable, "Width tiles", level.widthTiles, new IntSetter() {
 			@Override
 			public void set(int value) {
+				recordUndo("Edit world width");
 				level.widthTiles = Math.max(1, value);
+				updateWorldCamera();
+				markHoverDirty();
 			}
 		});
 		heightField = addIntegerField(leftTable, "Height tiles", level.heightTiles, new IntSetter() {
 			@Override
 			public void set(int value) {
+				recordUndo("Edit world height");
 				level.heightTiles = Math.max(1, value);
+				updateWorldCamera();
+				markHoverDirty();
 			}
 		});
 		TextButton saveButton = addButton(leftTable, "Save");
@@ -472,6 +531,13 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				saveLevel();
+			}
+		});
+		TextButton loadButton = addButton(leftTable, "Load");
+		loadButton.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				loadLevel();
 			}
 		});
 		TextButton playButton = addButton(leftTable, "Play");
@@ -494,13 +560,17 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			addNumberField(leftTable, "X", selectedObject.x, new NumberSetter() {
 				@Override
 				public void set(float value) {
+					recordUndo("Edit object X");
 					selectedObject.x = value;
+					markHoverDirty();
 				}
 			});
 			addNumberField(leftTable, "Y", selectedObject.y, new NumberSetter() {
 				@Override
 				public void set(float value) {
+					recordUndo("Edit object Y");
 					selectedObject.y = value;
+					markHoverDirty();
 				}
 			});
 			if(selectedObject.type == EditorObjectType.POLYGON){
@@ -508,19 +578,25 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 				addIntegerField(leftTable, "Edges", selectedObject.points.size, new IntSetter() {
 					@Override
 					public void set(int value) {
+						recordUndo("Edit polygon edges");
 						selectedObject.setPolygonVertexCount(value);
+						markHoverDirty();
 					}
 				});
 				addNumberField(leftTable, "Width", selectedObject.width, new NumberSetter() {
 					@Override
 					public void set(float value) {
+						recordUndo("Edit polygon width");
 						selectedObject.scalePointBounds(Math.max(1f, value), selectedObject.height);
+						markHoverDirty();
 					}
 				});
 				addNumberField(leftTable, "Height", selectedObject.height, new NumberSetter() {
 					@Override
 					public void set(float value) {
+						recordUndo("Edit polygon height");
 						selectedObject.scalePointBounds(selectedObject.width, Math.max(1f, value));
+						markHoverDirty();
 					}
 				});
 			}
@@ -529,19 +605,25 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 				addIntegerField(leftTable, "Path points", selectedObject.points.size, new IntSetter() {
 					@Override
 					public void set(int value) {
+						recordUndo("Edit platform path points");
 						selectedObject.setPlatformPointCount(value);
+						markHoverDirty();
 					}
 				});
 				addNumberField(leftTable, "End dx", selectedObject.points.peek().x, new NumberSetter() {
 					@Override
 					public void set(float value) {
+						recordUndo("Edit platform end X");
 						selectedObject.setPlatformEnd(value, selectedObject.points.peek().y);
+						markHoverDirty();
 					}
 				});
 				addNumberField(leftTable, "End dy", selectedObject.points.peek().y, new NumberSetter() {
 					@Override
 					public void set(float value) {
+						recordUndo("Edit platform end Y");
 						selectedObject.setPlatformEnd(selectedObject.points.peek().x, value);
+						markHoverDirty();
 					}
 				});
 			}
@@ -549,19 +631,24 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 				addNumberField(leftTable, "Width", selectedObject.width, new NumberSetter() {
 					@Override
 					public void set(float value) {
+						recordUndo("Edit object width");
 						selectedObject.width = Math.max(1f, value);
+						markHoverDirty();
 					}
 				});
 				addNumberField(leftTable, "Height", selectedObject.height, new NumberSetter() {
 					@Override
 					public void set(float value) {
+						recordUndo("Edit object height");
 						selectedObject.height = Math.max(1f, value);
+						markHoverDirty();
 					}
 				});
 			}
 			addNumberField(leftTable, "Rotation", selectedObject.rotation, new NumberSetter() {
 				@Override
 				public void set(float value) {
+					recordUndo("Edit rotation");
 					selectedObject.rotation = value;
 					selectedObject.snapMode = SnapMode.FREE;
 					markHoverDirty();
@@ -573,10 +660,12 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 					addBooleanField(leftTable, propertyName, selectedObject.properties.get(propertyName) != null, new BooleanSetter() {
 						@Override
 						public void set(boolean value) {
+							recordUndo("Edit " + propertyName);
 							if(value)
 								selectedObject.properties.put(propertyName, "true");
 							else
 								selectedObject.properties.remove(propertyName);
+							markHoverDirty();
 						}
 					});
 				}
@@ -584,10 +673,12 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 					addTextField(leftTable, propertyName, selectedObject.properties.get(propertyName), new TextSetter() {
 						@Override
 						public void set(String value) {
+							recordUndo("Edit " + propertyName);
 							if(value == null || value.trim().length() == 0)
 								selectedObject.properties.remove(propertyName);
 							else
 								selectedObject.properties.put(propertyName, value);
+							markHoverDirty();
 						}
 					});
 				}
@@ -596,6 +687,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			duplicateButton.addListener(new ChangeListener() {
 				@Override
 				public void changed(ChangeEvent event, Actor actor) {
+					recordUndo("Duplicate object");
 					EditorLevelObject copy = selectedObject.copy();
 					level.objects.add(copy);
 					selectedObject = copy;
@@ -683,6 +775,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			public void changed(ChangeEvent event, Actor actor) {
 				if(selectedObject == null)
 					return;
+				recordUndo("Toggle snap");
 				selectedObject.snapMode = selectedObject.snapMode == SnapMode.GRID ? SnapMode.FREE : SnapMode.GRID;
 				setStatus(selectedObject.snapMode == SnapMode.GRID ? "Snap to grid" : "Free positioning");
 				buildLeftPanel();
@@ -750,9 +843,14 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	private void saveLevel(){
 		try{
+			Array<String> errors = validateLevel();
+			if(errors.size > 0){
+				showValidationErrors("Save blocked", errors);
+				return;
+			}
 			String xml = EditorTmxWriter.write(level);
-			EditorFileBridge.saveText(level.fileName, xml);
-			setStatus("Saved " + level.fileName);
+			String backup = EditorFileBridge.saveTextWithBackup(level.fileName, xml);
+			setStatus(backup == null ? "Saved " + level.fileName : "Saved " + level.fileName + " (backup made)");
 			DebugConfig.log("level editor saved file=" + level.fileName + " objects=" + level.objects.size);
 		}
 		catch(RuntimeException exception){
@@ -761,13 +859,32 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		}
 	}
 
-	private void playLevel(){
-		if(level.getStart() == null){
-			setStatus("Missing Start");
-			return;
+	private void loadLevel(){
+		try{
+			String fileName = level.fileName;
+			String xml = EditorFileBridge.loadText(fileName);
+			EditorLevel loaded = EditorTmxReader.read(fileName, xml);
+			recordUndo("Load level");
+			level.copyFrom(loaded);
+			selectedObject = null;
+			cameraX = 0f;
+			cameraY = 0f;
+			updateWorldCamera();
+			buildLeftPanel();
+			setStatus("Loaded " + level.fileName);
+			markHoverDirty();
+			DebugConfig.log("level editor loaded file=" + level.fileName + " objects=" + level.objects.size);
 		}
-		if(level.getExit() == null){
-			setStatus("Missing Exit");
+		catch(RuntimeException exception){
+			setStatus("Load failed");
+			DebugConfig.log("level editor load failed " + exception);
+		}
+	}
+
+	private void playLevel(){
+		Array<String> errors = validateLevel();
+		if(errors.size > 0){
+			showValidationErrors("Play blocked", errors);
 			return;
 		}
 		Variables.levelComplete = false;
@@ -776,6 +893,16 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		DebugConfig.log("level editor playtest start objects=" + level.objects.size);
 		TiledMap map = EditorTiledMapFactory.build(level);
 		game.setScreen(new GameScreen(game, map, this));
+	}
+
+	private Array<String> validateLevel(){
+		return EditorLevelValidator.validate(level);
+	}
+
+	private void showValidationErrors(String prefix, Array<String> errors){
+		String firstError = errors.first();
+		setStatus(prefix + ": " + firstError);
+		DebugConfig.log("level editor validation " + prefix + " errors=" + errors.toString("; "));
 	}
 
 	private boolean placeFromStage(float stageX, float stageY){
@@ -791,6 +918,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private void placeObject(EditorObjectType type, float worldX, float worldY){
 		if(type == null)
 			return;
+		recordUndo("Add " + type.label);
 		float placedX = snap(worldX);
 		float placedY = snap(worldY);
 		if(type == EditorObjectType.POULIE){
@@ -807,6 +935,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private void deleteSelected(){
 		if(selectedObject == null)
 			return;
+		recordUndo("Delete object");
 		level.remove(selectedObject);
 		selectedObject = null;
 		buildLeftPanel();
@@ -824,6 +953,79 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		for(ObjectMap.Entry<EditorObjectType, TextButton> entry : paletteButtons)
 			entry.value.setChecked(entry.key == type);
 		markHoverDirty();
+	}
+
+	private boolean isControlPressed(){
+		return Gdx.input.isKeyPressed(Keys.CONTROL_LEFT) || Gdx.input.isKeyPressed(Keys.CONTROL_RIGHT);
+	}
+
+	private void recordUndo(String action){
+		undoStack.add(snapshot(action));
+		while(undoStack.size > MAX_UNDO_STATES)
+			undoStack.removeIndex(0);
+		redoStack.clear();
+	}
+
+	private void recordDragUndo(String action){
+		if(dragUndoRecorded)
+			return;
+		recordUndo(action);
+		dragUndoRecorded = true;
+	}
+
+	private EditorSnapshot snapshot(String action){
+		return new EditorSnapshot(level.copy(), selectedObjectIndex(), action);
+	}
+
+	private int selectedObjectIndex(){
+		if(selectedObject == null)
+			return -1;
+		return level.objects.indexOf(selectedObject, true);
+	}
+
+	private void undo(){
+		if(undoStack.size == 0){
+			setStatus("Nothing to undo");
+			return;
+		}
+		EditorSnapshot snapshot = undoStack.pop();
+		redoStack.add(snapshot(snapshot.action));
+		restoreSnapshot(snapshot);
+		setStatus("Undo: " + snapshot.action);
+	}
+
+	private void redo(){
+		if(redoStack.size == 0){
+			setStatus("Nothing to redo");
+			return;
+		}
+		EditorSnapshot snapshot = redoStack.pop();
+		undoStack.add(snapshot(snapshot.action));
+		restoreSnapshot(snapshot);
+		setStatus("Redo: " + snapshot.action);
+	}
+
+	private void restoreSnapshot(EditorSnapshot snapshot){
+		level.copyFrom(snapshot.level);
+		if(snapshot.selectedIndex >= 0 && snapshot.selectedIndex < level.objects.size)
+			selectedObject = level.objects.get(snapshot.selectedIndex);
+		else
+			selectedObject = null;
+		updateWorldCamera();
+		buildLeftPanel();
+		markHoverDirty();
+	}
+
+	private void panByMouseDrag(int screenX, int screenY){
+		int deltaX = screenX - panDragLastScreenX;
+		int deltaY = screenY - panDragLastScreenY;
+		panDragLastScreenX = screenX;
+		panDragLastScreenY = screenY;
+		cameraX -= deltaX / Math.max(zoom, 0.01f);
+		cameraY += deltaY / Math.max(zoom, 0.01f);
+		updateWorldCamera();
+		markHoverDirty();
+		logCamera();
 	}
 
 	private void updateCamera(float delta){

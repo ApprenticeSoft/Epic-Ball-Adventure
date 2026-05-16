@@ -52,6 +52,23 @@ public class EditorLevelObject {
 		markBoundsDirty();
 	}
 
+	public void copyFrom(EditorLevelObject other){
+		type = other.type;
+		x = other.x;
+		y = other.y;
+		width = other.width;
+		height = other.height;
+		rotation = other.rotation;
+		snapMode = other.snapMode;
+		properties.clear();
+		for(ObjectMap.Entry<String, String> entry : other.properties)
+			properties.put(entry.key, entry.value);
+		points.clear();
+		for(Vector2 point : other.points)
+			points.add(new Vector2(point));
+		markBoundsDirty();
+	}
+
 	public EditorLevelObject copy(){
 		EditorLevelObject copy = new EditorLevelObject(type, x + 32f, y + 32f, width, height);
 		copy.rotation = rotation;
@@ -61,6 +78,12 @@ public class EditorLevelObject {
 		for(Vector2 point : points)
 			copy.points.add(new Vector2(point));
 		copy.markBoundsDirty();
+		return copy;
+	}
+
+	public EditorLevelObject copyExact(){
+		EditorLevelObject copy = new EditorLevelObject(type, x, y, width, height);
+		copy.copyFrom(this);
 		return copy;
 	}
 
@@ -139,6 +162,17 @@ public class EditorLevelObject {
 		points.peek().set(endX, endY);
 		markBoundsDirty();
 		syncPlatformEndpointSize();
+	}
+
+	public void replacePoints(float[] vertices){
+		points.clear();
+		for(int i = 0; i + 1 < vertices.length; i += 2)
+			points.add(new Vector2(vertices[i], vertices[i + 1]));
+		markBoundsDirty();
+		if(type == EditorObjectType.PLATFORM)
+			syncPlatformEndpointSize();
+		else if(type == EditorObjectType.POLYGON)
+			updateWidthHeightFromPointBounds();
 	}
 
 	public void scalePointBounds(float newWidth, float newHeight){

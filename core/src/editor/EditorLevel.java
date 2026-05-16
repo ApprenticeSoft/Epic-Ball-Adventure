@@ -11,7 +11,12 @@ public class EditorLevel {
 	public final Array<EditorLevelObject> objects = new Array<EditorLevelObject>();
 
 	public EditorLevel(){
-		addDefaultObjects();
+		this(true);
+	}
+
+	public EditorLevel(boolean addDefaults){
+		if(addDefaults)
+			addDefaultObjects();
 	}
 
 	public int getPixelWidth(){
@@ -29,6 +34,25 @@ public class EditorLevel {
 		configureObject(object, type, centerX, centerY);
 		objects.add(object);
 		return object;
+	}
+
+	public EditorLevel copy(){
+		EditorLevel copy = new EditorLevel(false);
+		copy.copyFrom(this);
+		return copy;
+	}
+
+	public void copyFrom(EditorLevel other){
+		fileName = other.fileName;
+		widthTiles = other.widthTiles;
+		heightTiles = other.heightTiles;
+		objects.clear();
+		for(EditorLevelObject object : other.objects)
+			objects.add(object.copyExact());
+	}
+
+	public void clear(){
+		objects.clear();
 	}
 
 	public void configureObject(EditorLevelObject object, EditorObjectType type, float centerX, float centerY){

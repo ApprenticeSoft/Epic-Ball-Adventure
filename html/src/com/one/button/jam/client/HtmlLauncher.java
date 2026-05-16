@@ -21,6 +21,7 @@ public class HtmlLauncher extends GwtApplication {
     @Override
     public ApplicationListener createApplicationListener() {
         configureDebug();
+        disableContextMenu();
         return new MyGdxGame();
     }
 
@@ -79,5 +80,14 @@ public class HtmlLauncher extends GwtApplication {
     private static native boolean isMobileBrowser() /*-{
         var userAgent = ($wnd.navigator && $wnd.navigator.userAgent) || "";
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    }-*/;
+
+    private static native void disableContextMenu() /*-{
+        $doc.addEventListener("contextmenu", function(event) {
+            var target = event.target;
+            if(target && (target.tagName === "CANVAS" || target.id === "embed-html")){
+                event.preventDefault();
+            }
+        }, false);
     }-*/;
 }
