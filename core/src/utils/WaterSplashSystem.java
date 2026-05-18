@@ -20,6 +20,9 @@ public class WaterSplashSystem {
 	private static final float MIN_SPLASH_SPEED = 1.2f;
 	private static final float MIN_SPLASH_TOTAL_SPEED = 2.4f;
 	private static final float MIN_RAY_DISTANCE2 = 0.0004f;
+	private static final float MAX_AIRBORNE_AGE = 12f;
+	private static final float AIRBORNE_SAFETY_MARGIN = 18f;
+	private static final float RIPPLE_BOUNCE_ALPHA = 0.45f;
 
 	private final World world;
 	private final Array<Eau> waters;
@@ -27,8 +30,15 @@ public class WaterSplashSystem {
 	private final Vector2 previousPosition = new Vector2();
 	private final Vector2 rayHitPoint = new Vector2();
 	private final Vector2 rayHitNormal = new Vector2();
+	private final Vector2 drawPoint = new Vector2();
+	private final RippleSegment[] rippleSegments = new RippleSegment[]{
+			new RippleSegment(), new RippleSegment(), new RippleSegment()
+	};
 	private float rayHitFraction;
+	private float waterHitFraction;
+	private float waterHitLocalX;
 	private boolean rayHit;
+	private Eau waterHit;
 
 	private final RayCastCallback hardSurfaceRayCast = new RayCastCallback() {
 		@Override
@@ -56,16 +66,22 @@ public class WaterSplashSystem {
 		WaterImpact impact = WaterImpact.fromFixture(water, impactFixture, contact);
 		if(impact.downwardSpeed < MIN_SPLASH_SPEED && impact.totalSpeed < MIN_SPLASH_TOTAL_SPEED)
 			return;
-		spawnImpact(impact, water.getSurfaceAngleDegrees());
+		spawnImpact(impact, water);
 	}
 
 	public void update(float delta){
 		for(int i = particles.size - 1; i >= 0; i--){
 			SplashParticle particle = particles.get(i);
-			if(particle.isAirborne())
+			if(particle.isAirborne()){
 				updateDroplet(particle, delta);
-			else
+				if(particle.isAirborne() && shouldDiscardAirborne(particle)){
+					particles.removeIndex(i);
+					continue;
+				}
+			}
+			else{
 				particle.updateAge(delta);
+			}
 
 			if(particle.isExpired())
 				particles.removeIndex(i);
@@ -82,7 +98,9 @@ public class WaterSplashSystem {
 			if(alpha <= 0f)
 				continue;
 			batch.setColor(waterColor.r, waterColor.g, waterColor.b, alpha);
-			if(particle.isAirborne() && dropRegion != null)
+			if(particle.state == SplashParticleState.RIPPLE && flatRegion != null)
+				drawRippleParticle(batch, flatRegion, particle, waterColor);
+			else if(particle.isAirborne() && dropRegion != null)
 				drawDroplet(batch, dropRegion, particle);
 			else if(flatRegion != null)
 				drawFlatParticle(batch, flatRegion, particle);
@@ -99,7 +117,7 @@ public class WaterSplashSystem {
 		for(SplashParticle particle : particles){
 			if(particle.state != SplashParticleState.RIPPLE)
 				continue;
-			drawParticle(batch, flatRegion, particle, waterColor);
+			drawRippleParticle(batch, flatRegion, particle, waterColor);
 		}
 		batch.setColor(1, 1, 1, 1);
 	}
@@ -127,10 +145,11 @@ public class WaterSplashSystem {
 		return particles.size;
 	}
 
-	private void spawnImpact(WaterImpact impact, float surfaceAngleDegrees){
+	private void spawnImpact(WaterImpact impact, Eau water){
 		float rippleRadius = MathUtils.clamp(impact.size * 1.2f + impact.intensity * 0.18f, 0.45f, 5f);
 		float rippleAlpha = MathUtils.clamp(0.18f + impact.intensity * 0.035f, 0.22f, 0.75f);
-		particles.add(SplashParticle.ripple(impact.point, rippleRadius, 0.78f, rippleAlpha, surfaceAngleDegrees));
+		particles.add(SplashParticle.ripple(water, impact.point, rippleRadius, 0.78f, rippleAlpha,
+				water.getSurfaceAngleDegrees()));
 
 		int dropletCount = MathUtils.clamp(Math.round(4f + impact.intensity * 1.25f + impact.size * 1.4f), 5, 34);
 		float radiusBase = MathUtils.clamp(0.035f + impact.intensity * 0.011f + impact.size * 0.012f, 0.04f, 0.24f);
@@ -149,9 +168,8 @@ public class WaterSplashSystem {
 					.mulAdd(normal, 0.08f)
 					.mulAdd(tangent, MathUtils.random(-impact.size * 0.18f, impact.size * 0.18f));
 			float radius = radiusBase * MathUtils.random(0.65f, 1.35f);
-			float lifetime = MathUtils.random(0.58f, 1.15f);
 			float alpha = MathUtils.clamp(0.45f + impact.intensity * 0.025f, 0.48f, 0.9f);
-			particles.add(SplashParticle.droplet(position, velocity, radius, lifetime, alpha));
+			particles.add(SplashParticle.droplet(position, velocity, radius, MAX_AIRBORNE_AGE, alpha));
 		}
 		trimParticles();
 	}
@@ -160,16 +178,18 @@ public class WaterSplashSystem {
 		previousPosition.set(particle.position);
 		particle.integrate(delta, VISUAL_GRAVITY);
 
-		if(particle.age > 0.04f && previousPosition.dst2(particle.position) > MIN_RAY_DISTANCE2
-				&& findHardSurfaceHit(previousPosition, particle.position)){
-			particle.flattenOnSurface(rayHitPoint, rayHitNormal);
+		boolean canHit = particle.age > 0.04f && previousPosition.dst2(particle.position) > MIN_RAY_DISTANCE2;
+		boolean hardSurfaceHit = canHit && findHardSurfaceHit(previousPosition, particle.position);
+		boolean waterSurfaceHit = canHit && findWaterSurfaceHit(previousPosition, particle.position);
+
+		if(waterSurfaceHit && (!hardSurfaceHit || waterHitFraction <= rayHitFraction)){
+			particle.mergeWithWater(waterHit, waterHitLocalX);
 			return;
 		}
 
-		if(particle.age > 0.1f && particle.velocity.y <= 0f){
-			Eau water = containingWater(particle.position);
-			if(water != null)
-				particle.mergeWithWater(water.getSurfacePoint(particle.position), water.getSurfaceAngleDegrees());
+		if(hardSurfaceHit){
+			particle.flattenOnSurface(rayHitPoint, rayHitNormal);
+			return;
 		}
 	}
 
@@ -180,11 +200,45 @@ public class WaterSplashSystem {
 		return rayHit;
 	}
 
-	private Eau containingWater(Vector2 point){
-		for(Eau water : waters)
-			if(water.containsWorldPoint(point))
-				return water;
-		return null;
+	private boolean findWaterSurfaceHit(Vector2 from, Vector2 to){
+		waterHit = null;
+		waterHitFraction = 1f;
+		for(Eau water : waters){
+			Vector2 localFrom = water.getLocalPointCopy(from);
+			Vector2 localTo = water.getLocalPointCopy(to);
+			float surfaceY = water.getSurfaceLocalY();
+			if(localFrom.y < surfaceY || localTo.y > surfaceY)
+				continue;
+			float deltaY = localFrom.y - localTo.y;
+			if(Math.abs(deltaY) < 0.0001f)
+				continue;
+			float fraction = (localFrom.y - surfaceY) / deltaY;
+			if(fraction < 0f || fraction > 1f)
+				continue;
+			float localX = localFrom.x + (localTo.x - localFrom.x) * fraction;
+			if(!water.containsSurfaceLocalX(localX))
+				continue;
+			if(fraction < waterHitFraction){
+				waterHit = water;
+				waterHitFraction = fraction;
+				waterHitLocalX = localX;
+			}
+		}
+		return waterHit != null;
+	}
+
+	private boolean shouldDiscardAirborne(SplashParticle particle){
+		if(particle.age < MAX_AIRBORNE_AGE)
+			return false;
+		if(waters.size == 0)
+			return true;
+		for(Eau water : waters){
+			Vector2 localPoint = water.getLocalPointCopy(particle.position);
+			if(Math.abs(localPoint.x) <= water.getSurfaceHalfWidth() + AIRBORNE_SAFETY_MARGIN
+					&& localPoint.y >= -water.height - AIRBORNE_SAFETY_MARGIN)
+				return false;
+		}
+		return true;
 	}
 
 	private boolean isHardSurface(Fixture fixture){
@@ -208,10 +262,46 @@ public class WaterSplashSystem {
 		if(alpha <= 0f)
 			return;
 		batch.setColor(waterColor.r, waterColor.g, waterColor.b, alpha);
-		if(particle.isAirborne())
+		if(particle.state == SplashParticleState.RIPPLE)
+			drawRippleParticle(batch, region, particle, waterColor);
+		else if(particle.isAirborne())
 			drawDroplet(batch, region, particle);
 		else
 			drawFlatParticle(batch, region, particle);
+	}
+
+	private void drawRippleParticle(SpriteBatch batch, TextureRegion region, SplashParticle particle, Color waterColor){
+		if(particle.water == null){
+			drawFlatParticle(batch, region, particle);
+			return;
+		}
+		int segmentCount = collectRippleSegments(particle.waterLocalX, particle.renderLength(),
+				particle.water.getSurfaceHalfWidth(), rippleSegments);
+		for(int i = 0; i < segmentCount; i++)
+			drawRippleSegment(batch, region, particle, waterColor, rippleSegments[i]);
+	}
+
+	private void drawRippleSegment(SpriteBatch batch, TextureRegion region, SplashParticle particle, Color waterColor,
+			RippleSegment segment){
+		float length = segment.end - segment.start;
+		if(length <= 0.01f)
+			return;
+		float alpha = particle.renderAlpha() * segment.alphaScale;
+		if(alpha <= 0f)
+			return;
+		particle.water.getSurfacePoint((segment.start + segment.end) * 0.5f, drawPoint);
+		batch.setColor(waterColor.r, waterColor.g, waterColor.b, alpha);
+		float thickness = particle.renderThickness();
+		batch.draw(region,
+				drawPoint.x - length * 0.5f,
+				drawPoint.y - thickness * 0.5f,
+				length * 0.5f,
+				thickness * 0.5f,
+				length,
+				thickness,
+				1,
+				1,
+				particle.water.getSurfaceAngleDegrees());
 	}
 
 	private void drawFlatParticle(SpriteBatch batch, TextureRegion region, SplashParticle particle){
@@ -230,7 +320,65 @@ public class WaterSplashSystem {
 	}
 
 	private void trimParticles(){
+		while(particles.size > MAX_PARTICLES && removeOldestLandedParticle()){
+		}
 		while(particles.size > MAX_PARTICLES)
 			particles.removeIndex(0);
+	}
+
+	private boolean removeOldestLandedParticle(){
+		for(int i = 0; i < particles.size; i++){
+			if(!particles.get(i).isAirborne()){
+				particles.removeIndex(i);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	static int collectRippleSegments(float centerLocalX, float fullLength, float halfWidth, RippleSegment[] segments){
+		if(segments == null || segments.length == 0 || fullLength <= 0f || halfWidth <= 0f)
+			return 0;
+
+		int count = 0;
+		float start = centerLocalX - fullLength * 0.5f;
+		float end = centerLocalX + fullLength * 0.5f;
+		count = addClippedRippleSegment(segments, count, start, end, -halfWidth, halfWidth, 1f);
+
+		if(start < -halfWidth){
+			float reflectedEnd = Math.min(-halfWidth + (-halfWidth - start), halfWidth);
+			count = addClippedRippleSegment(segments, count, -halfWidth, reflectedEnd, -halfWidth, halfWidth,
+					RIPPLE_BOUNCE_ALPHA);
+		}
+		if(end > halfWidth){
+			float reflectedStart = Math.max(halfWidth - (end - halfWidth), -halfWidth);
+			count = addClippedRippleSegment(segments, count, reflectedStart, halfWidth, -halfWidth, halfWidth,
+					RIPPLE_BOUNCE_ALPHA);
+		}
+		return count;
+	}
+
+	private static int addClippedRippleSegment(RippleSegment[] segments, int count, float start, float end, float min,
+			float max, float alphaScale){
+		if(count >= segments.length)
+			return count;
+		float clippedStart = Math.max(start, min);
+		float clippedEnd = Math.min(end, max);
+		if(clippedEnd <= clippedStart)
+			return count;
+		segments[count].set(clippedStart, clippedEnd, alphaScale);
+		return count + 1;
+	}
+
+	static final class RippleSegment {
+		float start;
+		float end;
+		float alphaScale;
+
+		void set(float start, float end, float alphaScale){
+			this.start = start;
+			this.end = end;
+			this.alphaScale = alphaScale;
+		}
 	}
 }

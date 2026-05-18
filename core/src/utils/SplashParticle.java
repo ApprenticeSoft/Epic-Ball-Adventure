@@ -1,5 +1,7 @@
 package utils;
 
+import bodies.Eau;
+
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 
@@ -19,6 +21,12 @@ final class SplashParticle {
 	float age;
 	float lifetime;
 	float alpha;
+	float waterLocalX;
+	float startLength;
+	float startThickness;
+	float targetLength;
+	float targetThickness;
+	Eau water;
 	SplashParticleState state;
 
 	private SplashParticle(){
@@ -31,21 +39,32 @@ final class SplashParticle {
 		particle.radius = radius;
 		particle.length = radius * 2f;
 		particle.thickness = radius * 2f;
+		particle.startLength = particle.length;
+		particle.startThickness = particle.thickness;
+		particle.targetLength = particle.length;
+		particle.targetThickness = particle.thickness;
 		particle.lifetime = lifetime;
 		particle.alpha = alpha;
 		particle.state = SplashParticleState.AIRBORNE;
 		return particle;
 	}
 
-	static SplashParticle ripple(Vector2 position, float radius, float lifetime, float alpha, float angleDegrees){
+	static SplashParticle ripple(Eau water, Vector2 position, float radius, float lifetime, float alpha, float angleDegrees){
 		SplashParticle particle = new SplashParticle();
 		particle.position.set(position);
 		particle.radius = radius;
 		particle.length = radius;
 		particle.thickness = Math.max(0.03f, radius * 0.08f);
+		particle.startLength = particle.length;
+		particle.startThickness = particle.thickness;
+		particle.targetLength = particle.length;
+		particle.targetThickness = particle.thickness;
 		particle.lifetime = lifetime;
 		particle.alpha = alpha;
 		particle.angleDegrees = angleDegrees;
+		particle.water = water;
+		if(water != null)
+			particle.waterLocalX = water.getSurfaceLocalX(position);
 		particle.state = SplashParticleState.RIPPLE;
 		return particle;
 	}
@@ -67,7 +86,30 @@ final class SplashParticle {
 		lifetime = 0.45f;
 		length = Math.max(radius * 4f, 0.25f);
 		thickness = Math.max(radius * 0.5f, 0.025f);
+		startLength = length;
+		startThickness = thickness;
+		targetLength = length;
+		targetThickness = thickness;
 		angleDegrees = surfaceAngleDegrees;
+		alpha = Math.min(alpha, 0.55f);
+		water = null;
+		state = SplashParticleState.RIPPLE;
+	}
+
+	void mergeWithWater(Eau water, float surfaceLocalX){
+		this.water = water;
+		waterLocalX = surfaceLocalX;
+		position.set(water.getSurfacePoint(surfaceLocalX));
+		velocity.setZero();
+		age = 0f;
+		lifetime = 0.45f;
+		length = Math.max(radius * 4f, 0.25f);
+		thickness = Math.max(radius * 0.5f, 0.025f);
+		startLength = length;
+		startThickness = thickness;
+		targetLength = length;
+		targetThickness = thickness;
+		angleDegrees = water.getSurfaceAngleDegrees();
 		alpha = Math.min(alpha, 0.55f);
 		state = SplashParticleState.RIPPLE;
 	}
@@ -77,14 +119,19 @@ final class SplashParticle {
 		velocity.setZero();
 		age = 0f;
 		lifetime = 0.7f;
-		length = Math.max(radius * 5f, 0.28f);
-		thickness = Math.max(radius * 0.7f, 0.025f);
+		startLength = radius * 2f;
+		startThickness = radius * 2f;
+		targetLength = Math.max(radius * 5f, 0.28f);
+		targetThickness = Math.max(radius * 0.7f, 0.025f);
+		length = targetLength;
+		thickness = targetThickness;
 		alpha = Math.min(alpha, 0.5f);
 		Vector2 tangent = new Vector2(surfaceNormal.y, -surfaceNormal.x);
 		if(tangent.isZero())
 			tangent.set(1, 0);
 		tangent.nor();
 		angleDegrees = (float)Math.atan2(tangent.y, tangent.x) * MathUtils.radiansToDegrees;
+		water = null;
 		state = SplashParticleState.FLATTENED;
 	}
 
@@ -93,30 +140,45 @@ final class SplashParticle {
 	}
 
 	boolean isExpired(){
+		if(state == SplashParticleState.AIRBORNE)
+			return false;
 		return age >= lifetime;
 	}
 
 	float progress(){
+		if(state == SplashParticleState.AIRBORNE)
+			return 0f;
 		if(lifetime <= 0f)
 			return 1f;
 		return MathUtils.clamp(age / lifetime, 0f, 1f);
 	}
 
 	float renderAlpha(){
-		return alpha * (1f - progress());
+		if(state == SplashParticleState.AIRBORNE)
+			return alpha;
+		return alpha * (1f - smoothProgress());
 	}
 
 	float renderLength(){
+		float progress = smoothProgress();
 		if(state == SplashParticleState.RIPPLE)
-			return length * (1f + progress() * 2.4f);
+			return length * (1f + progress * 2.4f);
 		if(state == SplashParticleState.FLATTENED)
-			return length * (1f + progress() * 1.2f);
+			return MathUtils.lerp(startLength, targetLength, progress);
 		return radius * 2f;
 	}
 
 	float renderThickness(){
 		if(state == SplashParticleState.AIRBORNE)
 			return radius * 2f;
-		return Math.max(0.01f, thickness * (1f - progress() * 0.75f));
+		float progress = smoothProgress();
+		if(state == SplashParticleState.FLATTENED)
+			return Math.max(0.01f, MathUtils.lerp(startThickness, targetThickness, progress));
+		return Math.max(0.01f, thickness * (1f - progress * 0.75f));
+	}
+
+	private float smoothProgress(){
+		float progress = progress();
+		return progress * progress * (3f - 2f * progress);
 	}
 }

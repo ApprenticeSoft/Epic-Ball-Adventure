@@ -53,11 +53,42 @@ public class Eau extends Obstacle{
 		return Math.abs(localPoint.x) <= width && Math.abs(localPoint.y) <= height;
 	}
 
+	public Vector2 getLocalPointCopy(Vector2 worldPoint){
+		return new Vector2(body.getLocalPoint(worldPoint));
+	}
+
+	public float getSurfaceLocalX(Vector2 worldPoint){
+		return body.getLocalPoint(worldPoint).x;
+	}
+
+	public boolean containsSurfaceLocalX(float localX){
+		return localX >= -width && localX <= width;
+	}
+
+	public float getSurfaceHalfWidth(){
+		return width;
+	}
+
+	public float getSurfaceLocalY(){
+		return height;
+	}
+
 	public Vector2 getSurfacePoint(Vector2 worldPoint){
 		Vector2 localPoint = new Vector2(body.getLocalPoint(worldPoint));
 		localPoint.x = MathUtils.clamp(localPoint.x, -width, width);
 		localPoint.y = height;
 		return new Vector2(body.getWorldPoint(localPoint));
+	}
+
+	public Vector2 getSurfacePoint(float localX){
+		Vector2 localPoint = new Vector2(MathUtils.clamp(localX, -width, width), height);
+		return new Vector2(body.getWorldPoint(localPoint));
+	}
+
+	public Vector2 getSurfacePoint(float localX, Vector2 out){
+		Vector2 localPoint = out.set(MathUtils.clamp(localX, -width, width), height);
+		out.set(body.getWorldPoint(localPoint));
+		return out;
 	}
 
 	public Vector2 getSurfaceNormal(){

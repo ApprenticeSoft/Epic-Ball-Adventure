@@ -36,6 +36,18 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void airborneDropletKeepsIntensityUntilContact(){
+		SplashParticle particle = SplashParticle.droplet(new Vector2(1f, 2f), new Vector2(0f, -4f), 0.08f, 1f, 0.8f);
+
+		particle.updateAge(1.5f);
+
+		assertTrue(particle.isAirborne());
+		assertFalse(particle.isExpired());
+		assertEquals(0.8f, particle.renderAlpha(), 0.0001f);
+		assertEquals(0.16f, particle.renderLength(), 0.0001f);
+	}
+
+	@Test
 	public void dropletFlattensAlongSurfaceTangent(){
 		SplashParticle particle = SplashParticle.droplet(new Vector2(0f, 1f), new Vector2(0f, -2f), 0.1f, 1f, 0.8f);
 
@@ -44,5 +56,53 @@ public class WaterSplashSystemTest {
 		assertFalse(particle.isAirborne());
 		assertEquals(SplashParticleState.FLATTENED, particle.state);
 		assertEquals(-45f, particle.angleDegrees, 0.001f);
+	}
+
+	@Test
+	public void flattenedDropletMorphsFromRoundToSurfaceSplat(){
+		SplashParticle particle = SplashParticle.droplet(new Vector2(0f, 1f), new Vector2(0f, -2f), 0.1f, 1f, 0.8f);
+
+		particle.flattenOnSurface(new Vector2(2f, 3f), new Vector2(0f, 1f));
+		float initialLength = particle.renderLength();
+		float initialThickness = particle.renderThickness();
+		particle.updateAge(0.35f);
+
+		assertTrue(particle.renderLength() > initialLength);
+		assertTrue(particle.renderThickness() < initialThickness);
+		assertTrue(particle.renderAlpha() < 0.5f);
+	}
+
+	@Test
+	public void rippleMainSegmentIsClippedInsideWaterBounds(){
+		WaterSplashSystem.RippleSegment[] segments = rippleSegments();
+
+		int count = WaterSplashSystem.collectRippleSegments(-1.8f, 1.2f, 2f, segments);
+
+		assertEquals(2, count);
+		assertEquals(-2f, segments[0].start, 0.0001f);
+		assertEquals(-1.2f, segments[0].end, 0.0001f);
+		assertEquals(1f, segments[0].alphaScale, 0.0001f);
+	}
+
+	@Test
+	public void rippleBounceSegmentStaysInsideWaterBounds(){
+		WaterSplashSystem.RippleSegment[] segments = rippleSegments();
+
+		int count = WaterSplashSystem.collectRippleSegments(1.8f, 1.2f, 2f, segments);
+
+		assertEquals(2, count);
+		assertEquals(1.2f, segments[0].start, 0.0001f);
+		assertEquals(2f, segments[0].end, 0.0001f);
+		assertEquals(1.6f, segments[1].start, 0.0001f);
+		assertEquals(2f, segments[1].end, 0.0001f);
+		assertTrue(segments[1].alphaScale < segments[0].alphaScale);
+	}
+
+	private WaterSplashSystem.RippleSegment[] rippleSegments(){
+		return new WaterSplashSystem.RippleSegment[]{
+				new WaterSplashSystem.RippleSegment(),
+				new WaterSplashSystem.RippleSegment(),
+				new WaterSplashSystem.RippleSegment()
+		};
 	}
 }
