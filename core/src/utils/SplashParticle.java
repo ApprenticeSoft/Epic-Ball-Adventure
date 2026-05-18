@@ -110,7 +110,7 @@ final class SplashParticle {
 		targetLength = length;
 		targetThickness = thickness;
 		angleDegrees = water.getSurfaceAngleDegrees();
-		alpha = Math.min(alpha, 0.55f);
+		alpha = Math.min(alpha, water.getCouleur() == null ? 1f : water.getCouleur().a);
 		state = SplashParticleState.RIPPLE;
 	}
 

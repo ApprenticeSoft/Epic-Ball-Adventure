@@ -91,6 +91,12 @@ public class Eau extends Obstacle{
 		return out;
 	}
 
+	public Vector2 getSurfacePoint(float localX, float localYOffset, Vector2 out){
+		Vector2 localPoint = out.set(MathUtils.clamp(localX, -width, width), height + localYOffset);
+		out.set(body.getWorldPoint(localPoint));
+		return out;
+	}
+
 	public Vector2 getSurfaceNormal(){
 		return new Vector2(body.getWorldVector(new Vector2(0, 1))).nor();
 	}
