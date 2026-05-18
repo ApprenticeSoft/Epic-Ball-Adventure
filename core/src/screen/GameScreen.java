@@ -8,6 +8,7 @@ import utils.MyCamera;
 import utils.OrthogonalTiledMapRendererWithSprites;
 import utils.PlatformInfo;
 import utils.Variables;
+import utils.WaterSplashSystem;
 import bodies.Eau;
 import bodies.Obstacle;
 
@@ -74,6 +75,7 @@ public class GameScreen extends InputAdapter implements Screen{
 	private Label labelRestart, labelRestartOmbre;
 
 	private PolygonSpriteBatch polyBatch;
+	private WaterSplashSystem waterSplashSystem;
 
 	/***************Sounds****************/
 	private Sound soundWin, soundFall, soundWater, soundChock, soundSpring;
@@ -169,6 +171,7 @@ public class GameScreen extends InputAdapter implements Screen{
 				+ " platforms=" + lecteurCarte.plateformes.size
 				+ " springs=" + lecteurCarte.springs.size
 				+ " water=" + lecteurCarte.waters.size);
+        waterSplashSystem = new WaterSplashSystem(world, lecteurCarte.waters);
 
         /*
          * Label restart
@@ -232,6 +235,8 @@ public class GameScreen extends InputAdapter implements Screen{
 			stepPhysics(frameDelta);
 		else
 			physicsAccumulator = 0;
+		if(waterSplashSystem != null && !Variables.levelComplete)
+			waterSplashSystem.update(frameDelta);
 
         camera.mouvement(lecteurCarte.balle, tiledMap, frameDelta);
         camera.update();
@@ -255,6 +260,8 @@ public class GameScreen extends InputAdapter implements Screen{
         if(Variables.restart){
 	Variables.restart = false;
 	lecteurCarte.restart();
+	if(waterSplashSystem != null)
+		waterSplashSystem.clear();
         }
 		if(lecteurCarte.balle.restart){
 	levelRestart();
@@ -306,6 +313,7 @@ public class GameScreen extends InputAdapter implements Screen{
 					if(obstacle.body.getFixtureList().get(0) == fixtureA){
 						Eau eau = (Eau) obstacle;
 						eau.buoyancyController.addBody(fixtureB);
+						waterSplashSystem.splash(eau, fixtureB, contact);
 
 						if(fixtureB.getUserData().equals("Ball")){
 							System.out.println("Balle à l'eau !");
@@ -321,6 +329,7 @@ public class GameScreen extends InputAdapter implements Screen{
 					if(obstacle.body.getFixtureList().get(0) == fixtureB){
 						Eau eau = (Eau) obstacle;
 						eau.buoyancyController.addBody(fixtureA);
+						waterSplashSystem.splash(eau, fixtureA, contact);
 
 						if(fixtureA.getUserData().equals("Ball")){
 							System.out.println("Balle à l'eau !");
@@ -477,6 +486,13 @@ public class GameScreen extends InputAdapter implements Screen{
 		polyBatch.begin();
 		lecteurCarte.drawPolygone(polyBatch, camera);
 		polyBatch.end();
+
+		if(waterSplashSystem != null){
+			game.batch.setProjectionMatrix(camera.combined);
+			game.batch.begin();
+			waterSplashSystem.draw(game.batch, textureAtlas, couleurs.getCouleurEau());
+			game.batch.end();
+		}
 	}
 
 	private void updateGameplayCameraViewport(int screenWidth, int screenHeight){

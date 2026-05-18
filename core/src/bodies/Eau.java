@@ -7,6 +7,8 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.maps.MapObject;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.World;
 import com.one.button.jam.Couleurs;
 
@@ -44,5 +46,29 @@ public class Eau extends Obstacle{
 
 	public BuoyancyController getBuoyancyController(){
 		return buoyancyController;
+	}
+
+	public boolean containsWorldPoint(Vector2 worldPoint){
+		Vector2 localPoint = body.getLocalPoint(worldPoint);
+		return Math.abs(localPoint.x) <= width && Math.abs(localPoint.y) <= height;
+	}
+
+	public Vector2 getSurfacePoint(Vector2 worldPoint){
+		Vector2 localPoint = new Vector2(body.getLocalPoint(worldPoint));
+		localPoint.x = MathUtils.clamp(localPoint.x, -width, width);
+		localPoint.y = height;
+		return new Vector2(body.getWorldPoint(localPoint));
+	}
+
+	public Vector2 getSurfaceNormal(){
+		return new Vector2(body.getWorldVector(new Vector2(0, 1))).nor();
+	}
+
+	public float getSurfaceAngleDegrees(){
+		Vector2 normal = getSurfaceNormal();
+		Vector2 tangent = new Vector2(normal.y, -normal.x);
+		if(tangent.isZero())
+			tangent.set(1, 0);
+		return (float)Math.atan2(tangent.y, tangent.x) * MathUtils.radiansToDegrees;
 	}
 }

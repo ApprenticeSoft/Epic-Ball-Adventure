@@ -156,7 +156,7 @@ test('desktop editor opens and returns from playtest with Escape', async ({ page
     expect(editorLayout.fieldHeight).toBeLessThanOrEqual(30);
     expect(editorLayout.fontScale).toBeLessThan(0.12);
     expect(editorLayout.worldViewport.width).toBeGreaterThan(200);
-    expect(editorLayout.worldViewport.height).toBe(editorLayout.screen.height);
+    expect(editorLayout.worldViewport.height).toBe(editorLayout.screen.height - editorLayout.margin * 2);
 
     const layoutEventCount = (await getDebugEvents(page)).filter(line => line.includes('level editor layout')).length;
     await page.mouse.move(420, 320);
@@ -435,16 +435,17 @@ function parseCameraLayoutEvent(event) {
 }
 
 function parseEditorLayoutEvent(event) {
-  const match = event.match(/screen=([\d.]+)x([\d.]+) panels=([\d.]+),([\d.]+) buttonHeight=([\d.]+) fieldHeight=([\d.]+) fontScale=([\d.]+) worldViewport=([\d.]+)x([\d.]+)/);
+  const match = event.match(/screen=([\d.]+)x([\d.]+) panels=([\d.]+),([\d.]+)(?: margin=([\d.]+))? buttonHeight=([\d.]+) fieldHeight=([\d.]+) fontScale=([\d.]+) worldViewport=([\d.]+)x([\d.]+)/);
   if(!match)
     throw new Error(`Cannot parse editor layout event: ${event}`);
   return {
     screen: { width: Number(match[1]), height: Number(match[2]) },
     panels: { left: Number(match[3]), right: Number(match[4]) },
-    buttonHeight: Number(match[5]),
-    fieldHeight: Number(match[6]),
-    fontScale: Number(match[7]),
-    worldViewport: { width: Number(match[8]), height: Number(match[9]) }
+    margin: Number(match[5] || 0),
+    buttonHeight: Number(match[6]),
+    fieldHeight: Number(match[7]),
+    fontScale: Number(match[8]),
+    worldViewport: { width: Number(match[9]), height: Number(match[10]) }
   };
 }
 
