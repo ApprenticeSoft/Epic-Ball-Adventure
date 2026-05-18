@@ -90,6 +90,35 @@ public class WaterSplashSystem {
 		batch.setColor(1, 1, 1, 1);
 	}
 
+	public void drawRipples(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
+		if(particles.size == 0)
+			return;
+		TextureRegion flatRegion = textureAtlas.findRegion("WhiteSquare");
+		if(flatRegion == null)
+			return;
+		for(SplashParticle particle : particles){
+			if(particle.state != SplashParticleState.RIPPLE)
+				continue;
+			drawParticle(batch, flatRegion, particle, waterColor);
+		}
+		batch.setColor(1, 1, 1, 1);
+	}
+
+	public void drawDropletsAndSplats(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
+		if(particles.size == 0)
+			return;
+		TextureRegion dropRegion = textureAtlas.findRegion("BallColor");
+		TextureRegion flatRegion = textureAtlas.findRegion("WhiteSquare");
+		for(SplashParticle particle : particles){
+			if(particle.state == SplashParticleState.RIPPLE)
+				continue;
+			TextureRegion region = particle.isAirborne() ? dropRegion : flatRegion;
+			if(region != null)
+				drawParticle(batch, region, particle, waterColor);
+		}
+		batch.setColor(1, 1, 1, 1);
+	}
+
 	public void clear(){
 		particles.clear();
 	}
@@ -172,6 +201,17 @@ public class WaterSplashSystem {
 		float size = particle.radius * 2f;
 		batch.draw(region, particle.position.x - particle.radius, particle.position.y - particle.radius,
 				particle.radius, particle.radius, size, size, 1, 1, 0);
+	}
+
+	private void drawParticle(SpriteBatch batch, TextureRegion region, SplashParticle particle, Color waterColor){
+		float alpha = particle.renderAlpha();
+		if(alpha <= 0f)
+			return;
+		batch.setColor(waterColor.r, waterColor.g, waterColor.b, alpha);
+		if(particle.isAirborne())
+			drawDroplet(batch, region, particle);
+		else
+			drawFlatParticle(batch, region, particle);
 	}
 
 	private void drawFlatParticle(SpriteBatch batch, TextureRegion region, SplashParticle particle){

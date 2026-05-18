@@ -218,11 +218,24 @@ public class LecteurCarte {
 			 obstacle.draw(batch, textureAtlas);
 	}
 
+	public void drawRippleOccluders(SpriteBatch batch, TextureAtlas textureAtlas){
+		drawPlateforme(batch, textureAtlas);
+		drawSpring(batch, textureAtlas);
+		for(Obstacle obstacle : obstaclesOrganises){
+			if(!(obstacle instanceof Eau))
+				obstacle.draw(batch, textureAtlas);
+		}
+	}
+
 	public void drawPolygone(PolygonSpriteBatch batch, MyCamera camera){
         for(Polygone polygone : polygones){
 	polygone.setPos(0, 0);
 	polygone.draw(batch, couleurs);
         }
+	}
+
+	public void drawRipplePolygonOccluders(PolygonSpriteBatch batch, MyCamera camera){
+		drawPolygone(batch, camera);
 	}
 
 	public void drawPolygoneOmbre(PolygonSpriteBatch batch, MyCamera camera){

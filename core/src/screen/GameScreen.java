@@ -490,7 +490,18 @@ public class GameScreen extends InputAdapter implements Screen{
 		if(waterSplashSystem != null){
 			game.batch.setProjectionMatrix(camera.combined);
 			game.batch.begin();
-			waterSplashSystem.draw(game.batch, textureAtlas, couleurs.getCouleurEau());
+			waterSplashSystem.drawRipples(game.batch, textureAtlas, couleurs.getCouleurEau());
+			lecteurCarte.drawRippleOccluders(game.batch, textureAtlas);
+			game.batch.end();
+
+			polyBatch.setProjectionMatrix(camera.combined);
+			polyBatch.begin();
+			lecteurCarte.drawRipplePolygonOccluders(polyBatch, camera);
+			polyBatch.end();
+
+			game.batch.setProjectionMatrix(camera.combined);
+			game.batch.begin();
+			waterSplashSystem.drawDropletsAndSplats(game.batch, textureAtlas, couleurs.getCouleurEau());
 			game.batch.end();
 		}
 	}
