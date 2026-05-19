@@ -250,6 +250,13 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void refractionWaveStrengthTracksSurfaceMotion(){
+		assertEquals(0f, WaterSplashSystem.calculateRefractionWaveStrength(0f, 0f), 0.0001f);
+		assertTrue(WaterSplashSystem.calculateRefractionWaveStrength(0.4f, 0.2f) > 0.25f);
+		assertEquals(1f, WaterSplashSystem.calculateRefractionWaveStrength(4f, 4f), 0.0001f);
+	}
+
+	@Test
 	public void mergingTravelingWaveTransfersResidualToSpringSurface(){
 		WaterSplashSystem.WaterSurfaceSimulation simulation =
 				new WaterSplashSystem.WaterSurfaceSimulation(null, 3f);

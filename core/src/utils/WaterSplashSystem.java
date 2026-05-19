@@ -498,6 +498,17 @@ public class WaterSplashSystem {
 		return simulation == null ? 0f : simulation.displacementAt(localX);
 	}
 
+	public float refractionWaveStrength(){
+		float strength = 0f;
+		for(WaterSurfaceSimulation simulation : surfaceSimulations){
+			if(simulation == null)
+				continue;
+			strength = Math.max(strength, calculateRefractionWaveStrength(simulation.maxAbsDisplacement(),
+					simulation.energy));
+		}
+		return strength;
+	}
+
 	Vector2 surfacePoint(Eau water, float localX, Vector2 out){
 		return water.getSurfacePoint(localX, surfaceLocalY(water, localX) - water.getSurfaceLocalY(), out);
 	}
@@ -1129,6 +1140,11 @@ public class WaterSplashSystem {
 		float cosine = Math.max(0f, MathUtils.cos(t * MathUtils.PI * 0.5f));
 		float shoulder = 1f - smoothStep(t);
 		return MathUtils.clamp(cosine * 0.72f + shoulder * 0.28f, 0f, 1f);
+	}
+
+	static float calculateRefractionWaveStrength(float maxAbsDisplacement, float energy){
+		float strength = Math.max(Math.max(0f, maxAbsDisplacement), Math.max(0f, energy) * 0.65f);
+		return MathUtils.clamp(strength / 1.25f, 0f, 1f);
 	}
 
 	static int calculateSurfaceSampleCount(float halfWidth){

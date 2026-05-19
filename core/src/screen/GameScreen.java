@@ -492,19 +492,12 @@ public class GameScreen extends InputAdapter implements Screen{
         tiledMapRenderer.setView(camera);
 		boolean refractionReady = allowWaterRefraction && captureWaterRefractionScene();
 
-        game.batch.setProjectionMatrix(camera.combined);
-        game.batch.begin();
-		lecteurCarte.drawBehindWater(game.batch, textureAtlas);
-		game.batch.end();
+		drawGameplaySceneWithoutWater();
 
 		if(waterSplashSystem != null){
 			polyBatch.setProjectionMatrix(camera.combined);
-			polyBatch.begin();
-			lecteurCarte.drawPolygoneBehindWater(polyBatch, camera);
-			polyBatch.end();
-
-			polyBatch.setProjectionMatrix(camera.combined);
-			if(refractionReady && waterRefractionRenderer.beginWaterPass(polyBatch)){
+			if(refractionReady && waterRefractionRenderer.beginWaterPass(polyBatch,
+					waterSplashSystem.refractionWaveStrength())){
 				lecteurCarte.drawWater(polyBatch, textureAtlas, waterSplashSystem, true);
 				waterRefractionRenderer.endWaterPass(polyBatch);
 			}
@@ -519,30 +512,27 @@ public class GameScreen extends InputAdapter implements Screen{
 			game.batch.setProjectionMatrix(camera.combined);
 			game.batch.begin();
 			waterSplashSystem.drawRipples(game.batch, textureAtlas, couleurs.getCouleurEau());
-			lecteurCarte.drawRippleOccluders(game.batch, textureAtlas);
 			game.batch.end();
-
-			polyBatch.setProjectionMatrix(camera.combined);
-			polyBatch.begin();
-			lecteurCarte.drawRipplePolygonOccluders(polyBatch, camera);
-			polyBatch.end();
 
 			game.batch.setProjectionMatrix(camera.combined);
 			game.batch.begin();
 			waterSplashSystem.drawDropletsAndSplats(game.batch, textureAtlas, couleurs.getCouleurEau());
 			game.batch.end();
 		}
-		else{
-			game.batch.setProjectionMatrix(camera.combined);
-			game.batch.begin();
-			lecteurCarte.drawWaterOccluders(game.batch, textureAtlas);
-			game.batch.end();
+	}
 
-			polyBatch.setProjectionMatrix(camera.combined);
-			polyBatch.begin();
-			lecteurCarte.drawPolygone(polyBatch, camera);
-			polyBatch.end();
-		}
+	private void drawGameplaySceneWithoutWater(){
+		game.batch.setProjectionMatrix(camera.combined);
+		game.batch.begin();
+		lecteurCarte.drawBehindWater(game.batch, textureAtlas);
+		lecteurCarte.drawWaterOccluders(game.batch, textureAtlas);
+		game.batch.end();
+
+		polyBatch.setProjectionMatrix(camera.combined);
+		polyBatch.begin();
+		lecteurCarte.drawPolygoneBehindWater(polyBatch, camera);
+		lecteurCarte.drawPolygone(polyBatch, camera);
+		polyBatch.end();
 	}
 
 	private boolean captureWaterRefractionScene(){
@@ -551,15 +541,7 @@ public class GameScreen extends InputAdapter implements Screen{
 		if(!waterRefractionRenderer.beginCapture(couleurs.getCouleurFond()))
 			return false;
 
-		game.batch.setProjectionMatrix(camera.combined);
-		game.batch.begin();
-		lecteurCarte.drawBehindWater(game.batch, textureAtlas);
-		game.batch.end();
-
-		polyBatch.setProjectionMatrix(camera.combined);
-		polyBatch.begin();
-		lecteurCarte.drawPolygoneBehindWater(polyBatch, camera);
-		polyBatch.end();
+		drawGameplaySceneWithoutWater();
 
 		waterRefractionRenderer.endCapture();
 		return true;

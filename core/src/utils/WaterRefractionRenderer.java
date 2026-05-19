@@ -12,9 +12,10 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 
 public final class WaterRefractionRenderer {
-	private static final float DISTORTION_PIXELS = 12f;
-	private static final float SURFACE_RIPPLE_STRENGTH = 0.58f;
-	private static final float TINT_STRENGTH = 0.42f;
+	private static final float CALM_DISTORTION_PIXELS = 4.5f;
+	private static final float WAVE_DISTORTION_PIXELS = 26f;
+	private static final float SURFACE_RIPPLE_STRENGTH = 1.28f;
+	private static final float TINT_STRENGTH = 0.36f;
 
 	private ShaderProgram shader;
 	private FrameBuffer sceneBuffer;
@@ -88,7 +89,7 @@ public final class WaterRefractionRenderer {
 		sceneBuffer.end();
 	}
 
-	public boolean beginWaterPass(PolygonSpriteBatch batch){
+	public boolean beginWaterPass(PolygonSpriteBatch batch, float waveStrength){
 		if(!isReady())
 			return false;
 		sceneBuffer.getColorBufferTexture().bind(1);
@@ -98,9 +99,11 @@ public final class WaterRefractionRenderer {
 		shader.setUniformi("u_sceneTexture", 1);
 		shader.setUniformf("u_resolution", bufferWidth, bufferHeight);
 		shader.setUniformf("u_time", time);
-		shader.setUniformf("u_distortionPixels", DISTORTION_PIXELS);
+		shader.setUniformf("u_calmDistortionPixels", CALM_DISTORTION_PIXELS);
+		shader.setUniformf("u_waveDistortionPixels", WAVE_DISTORTION_PIXELS);
 		shader.setUniformf("u_surfaceRippleStrength", SURFACE_RIPPLE_STRENGTH);
 		shader.setUniformf("u_tintStrength", TINT_STRENGTH);
+		shader.setUniformf("u_waveStrength", Math.min(Math.max(waveStrength, 0f), 1f));
 		return true;
 	}
 
