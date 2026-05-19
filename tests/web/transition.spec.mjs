@@ -229,6 +229,56 @@ test('desktop editor remains responsive while zooming and panning', async ({ pag
   }
 });
 
+test('desktop editor keeps right-drag pan and wheel zoom after object placement', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
+
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if (message.type() === 'error') {
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1&ballStartEditor=1');
+    await waitForDebugEvent(page, logs, 'level editor opened', 10000);
+    await page.mouse.click(1165, 306);
+    await page.mouse.click(720, 360);
+
+    const beforeEvents = await getDebugEvents(page);
+    const beforeCount = beforeEvents.filter(line => line.includes('level editor camera')).length;
+    await page.mouse.move(720, 360);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.move(640, 405, { steps: 8 });
+    await page.mouse.up({ button: 'right' });
+    await waitForDebugEventCount(page, 'level editor camera', beforeCount + 1, 10000);
+    const afterPan = parseEditorCameraEvent(await latestDebugEvent(page, 'level editor camera'));
+
+    const afterPanCount = (await getDebugEvents(page)).filter(line => line.includes('level editor camera')).length;
+    await page.mouse.wheel(0, -360);
+    await waitForDebugEventCount(page, 'level editor camera', afterPanCount + 1, 10000);
+    const afterZoom = parseEditorCameraEvent(await latestDebugEvent(page, 'level editor camera'));
+
+    expect(Math.abs(afterPan.x)).toBeGreaterThan(1);
+    expect(afterZoom.zoom).not.toBe(afterPan.zoom);
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
 test('desktop editor automatically returns after completed playtest', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
 
@@ -317,6 +367,18 @@ async function waitForDebugEvent(page, logs, needle, timeoutMs) {
   }
   const debugEvents = await getDebugEvents(page);
   throw new Error(`Timed out waiting for "${needle}". Debug events:\n${debugEvents.join('\n')}\n\nConsole logs:\n${logs.join('\n')}`);
+}
+
+async function waitForDebugEventCount(page, needle, count, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while(Date.now() < deadline){
+    const debugEvents = await getDebugEvents(page);
+    if(debugEvents.filter(line => line.includes(needle)).length >= count)
+      return;
+    await page.waitForTimeout(100);
+  }
+  const debugEvents = await getDebugEvents(page);
+  throw new Error(`Timed out waiting for ${count} "${needle}" events. Debug events:\n${debugEvents.join('\n')}`);
 }
 
 async function measureAnimationFrames(page, durationMs) {
@@ -446,6 +508,18 @@ function parseEditorLayoutEvent(event) {
     fieldHeight: Number(match[7]),
     fontScale: Number(match[8]),
     worldViewport: { width: Number(match[9]), height: Number(match[10]) }
+  };
+}
+
+function parseEditorCameraEvent(event) {
+  const match = event.match(/x=([\d.-]+) y=([\d.-]+) zoom=([\d.-]+) viewport=([\d.-]+)x([\d.-]+)/);
+  if(!match)
+    throw new Error(`Cannot parse editor camera event: ${event}`);
+  return {
+    x: Number(match[1]),
+    y: Number(match[2]),
+    zoom: Number(match[3]),
+    viewport: { width: Number(match[4]), height: Number(match[5]) }
   };
 }
 

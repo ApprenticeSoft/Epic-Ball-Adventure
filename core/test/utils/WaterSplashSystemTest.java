@@ -121,25 +121,62 @@ public class WaterSplashSystemTest {
 		assertTrue(WaterSplashSystem.calculateWaveAmplitude(2f, 0.05f, 3f, 1f) > baseline);
 	}
 
-	@Test
-	public void waveBoundsStayInsideWaterBoundsNearEdges(){
-		WaterSplashSystem.RippleSegment[] segments = rippleSegments();
-
-		int count = WaterSplashSystem.collectWaveBounds(1.8f, 1.1f, 2f, segments);
-
-		assertEquals(2, count);
-		assertEquals(0.7f, segments[0].start, 0.0001f);
-		assertEquals(2f, segments[0].end, 0.0001f);
-		assertTrue(segments[1].start >= -2f);
-		assertTrue(segments[1].end <= 2f);
-		assertTrue(segments[1].alphaScale < segments[0].alphaScale);
-	}
-
 	private WaterSplashSystem.RippleSegment[] rippleSegments(){
 		return new WaterSplashSystem.RippleSegment[]{
 				new WaterSplashSystem.RippleSegment(),
 				new WaterSplashSystem.RippleSegment(),
 				new WaterSplashSystem.RippleSegment()
 		};
+	}
+
+	@Test
+	public void surfaceSimulationImpactDisplacesNearestSamples(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+		int center = simulation.nearestSample(0f);
+
+		simulation.applyImpact(0f, 0.2f, 0.5f, 0.4f);
+
+		assertTrue(simulation.hasMotion());
+		assertTrue(simulation.displacement(center) < 0f);
+		assertTrue(simulation.renderAlpha() > 0f);
+	}
+
+	@Test
+	public void surfaceSimulationPropagatesToNeighboringSamples(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+		int center = simulation.nearestSample(0f);
+		int neighbor = center + 3;
+
+		simulation.applyImpact(0f, 0.25f, 0.25f, 0.4f);
+		float initialNeighbor = Math.abs(simulation.displacement(neighbor));
+		for(int i = 0; i < 12; i++)
+			simulation.update(1f / 60f);
+
+		assertTrue(Math.abs(simulation.displacement(neighbor)) > initialNeighbor);
+	}
+
+	@Test
+	public void surfaceSimulationDampsTowardRest(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.25f, 0.25f, 0.4f);
+		float initialEnergy = simulation.energy;
+		for(int i = 0; i < 180; i++)
+			simulation.update(1f / 60f);
+
+		assertTrue(simulation.energy < initialEnergy);
+	}
+
+	@Test
+	public void surfaceSimulationSamplesStayInsideWaterBounds(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		assertEquals(-2f, simulation.localX(0), 0.0001f);
+		assertEquals(2f, simulation.localX(simulation.sampleCount - 1), 0.0001f);
+		assertEquals(simulation.sampleCount - 1, simulation.nearestSample(99f));
 	}
 }

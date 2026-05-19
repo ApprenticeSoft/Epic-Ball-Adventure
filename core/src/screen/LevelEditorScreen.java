@@ -161,6 +161,37 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private float lastHoverZoom;
 	private final Array<EditorSnapshot> undoStack = new Array<EditorSnapshot>();
 	private final Array<EditorSnapshot> redoStack = new Array<EditorSnapshot>();
+	private final InputAdapter worldMouseInput = new InputAdapter() {
+		@Override
+		public boolean scrolled(float amountX, float amountY) {
+			int screenX = Gdx.input.getX();
+			int screenY = Gdx.input.getY();
+			if(!isWorldScreen(screenX, screenY))
+				return false;
+			return LevelEditorScreen.this.scrolled(amountX, amountY);
+		}
+
+		@Override
+		public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+			if(button != Buttons.RIGHT || !isWorldScreen(screenX, screenY))
+				return false;
+			return beginPanDrag(screenX, screenY);
+		}
+
+		@Override
+		public boolean touchDragged(int screenX, int screenY, int pointer) {
+			if(dragMode != DragMode.PAN)
+				return false;
+			return LevelEditorScreen.this.touchDragged(screenX, screenY, pointer);
+		}
+
+		@Override
+		public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+			if(dragMode != DragMode.PAN)
+				return false;
+			return LevelEditorScreen.this.touchUp(screenX, screenY, pointer, button);
+		}
+	};
 
 	private static class EditorSnapshot {
 		final EditorLevel level;
@@ -187,7 +218,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	public void show() {
 		EditorBrowserBridge.setEditorShortcutsActive(true);
 		Gdx.graphics.setContinuousRendering(true);
-		Gdx.input.setInputProcessor(new InputMultiplexer(stage, this));
+		Gdx.input.setInputProcessor(new InputMultiplexer(worldMouseInput, stage, this));
 	}
 
 	@Override
@@ -294,10 +325,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		draggedPointIndex = -1;
 		dragUndoRecorded = false;
 		if(button == Buttons.RIGHT){
-			dragMode = DragMode.PAN;
-			panDragLastScreenX = screenX;
-			panDragLastScreenY = screenY;
-			return true;
+			return beginPanDrag(screenX, screenY);
 		}
 		if(activePaletteType != null){
 			EditorObjectType placementType = activePaletteType;
@@ -385,6 +413,15 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public void pause() {
+	}
+
+	private boolean beginPanDrag(int screenX, int screenY){
+		dragMode = DragMode.PAN;
+		draggedPointIndex = -1;
+		dragUndoRecorded = false;
+		panDragLastScreenX = screenX;
+		panDragLastScreenY = screenY;
+		return true;
 	}
 
 	@Override

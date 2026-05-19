@@ -16,7 +16,6 @@ import com.badlogic.gdx.utils.Array;
 
 public class WaterSplashSystem {
 	private static final int MAX_PARTICLES = 180;
-	private static final int MAX_WAVES = 32;
 	private static final float VISUAL_GRAVITY = 34f;
 	private static final float MIN_SPLASH_SPEED = 1.2f;
 	private static final float MIN_SPLASH_TOTAL_SPEED = 2.4f;
@@ -24,18 +23,21 @@ public class WaterSplashSystem {
 	private static final float MAX_AIRBORNE_AGE = 12f;
 	private static final float AIRBORNE_SAFETY_MARGIN = 18f;
 	private static final float RIPPLE_BOUNCE_ALPHA = 0.45f;
-	private static final float WAVE_BOUNCE_ALPHA = 0.38f;
+	private static final float SURFACE_SAMPLE_SPACING = 0.18f;
+	private static final float SURFACE_STIFFNESS = 34f;
+	private static final float SURFACE_DAMPING = 4.8f;
+	private static final float SURFACE_SPREAD = 16f;
 
 	private final World world;
 	private final Array<Eau> waters;
 	private final Array<SplashParticle> particles = new Array<SplashParticle>();
-	private final Array<SurfaceWave> waves = new Array<SurfaceWave>();
+	private final Array<WaterSurfaceSimulation> surfaceSimulations = new Array<WaterSurfaceSimulation>();
 	private final Vector2 previousPosition = new Vector2();
 	private final Vector2 rayHitPoint = new Vector2();
 	private final Vector2 rayHitNormal = new Vector2();
 	private final Vector2 drawPoint = new Vector2();
-	private final Vector2 waveStartPoint = new Vector2();
-	private final Vector2 waveEndPoint = new Vector2();
+	private final Vector2 surfaceStartPoint = new Vector2();
+	private final Vector2 surfaceEndPoint = new Vector2();
 	private final RippleSegment[] rippleSegments = new RippleSegment[]{
 			new RippleSegment(), new RippleSegment(), new RippleSegment()
 	};
@@ -75,12 +77,8 @@ public class WaterSplashSystem {
 	}
 
 	public void update(float delta){
-		for(int i = waves.size - 1; i >= 0; i--){
-			SurfaceWave wave = waves.get(i);
-			wave.update(delta);
-			if(wave.isExpired())
-				waves.removeIndex(i);
-		}
+		for(WaterSurfaceSimulation simulation : surfaceSimulations)
+			simulation.update(delta);
 		for(int i = particles.size - 1; i >= 0; i--){
 			SplashParticle particle = particles.get(i);
 			if(particle.isAirborne()){
@@ -100,12 +98,12 @@ public class WaterSplashSystem {
 	}
 
 	public void draw(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
-		if(particles.size == 0 && waves.size == 0)
+		if(particles.size == 0 && !hasActiveSurfaceSimulation())
 			return;
 		TextureRegion dropRegion = textureAtlas.findRegion("BallColor");
 		TextureRegion flatRegion = textureAtlas.findRegion("WhiteSquare");
 		if(flatRegion != null)
-			drawSurfaceWaves(batch, flatRegion, waterColor);
+			drawWaterSurfaces(batch, flatRegion, waterColor);
 		for(SplashParticle particle : particles){
 			float alpha = cappedRenderAlpha(particle, waterColor);
 			if(alpha <= 0f)
@@ -122,7 +120,7 @@ public class WaterSplashSystem {
 	}
 
 	public void drawRipples(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
-		if(particles.size == 0 && waves.size == 0)
+		if(particles.size == 0 && !hasActiveSurfaceSimulation())
 			return;
 		TextureRegion flatRegion = textureAtlas.findRegion("WhiteSquare");
 		if(flatRegion == null)
@@ -132,7 +130,7 @@ public class WaterSplashSystem {
 				continue;
 			drawRippleParticle(batch, flatRegion, particle, waterColor);
 		}
-		drawSurfaceWaves(batch, flatRegion, waterColor);
+		drawWaterSurfaces(batch, flatRegion, waterColor);
 		batch.setColor(1, 1, 1, 1);
 	}
 
@@ -153,7 +151,7 @@ public class WaterSplashSystem {
 
 	public void clear(){
 		particles.clear();
-		waves.clear();
+		surfaceSimulations.clear();
 	}
 
 	int getParticleCount(){
@@ -167,7 +165,7 @@ public class WaterSplashSystem {
 				waterAlpha);
 		particles.add(SplashParticle.ripple(water, impact.point, rippleRadius, 0.78f, rippleAlpha,
 				water.getSurfaceAngleDegrees()));
-		spawnSurfaceWave(impact, water, waterAlpha);
+		applySurfaceImpact(impact, water, waterAlpha);
 
 		int dropletCount = MathUtils.clamp(Math.round(4f + impact.intensity * 1.25f + impact.size * 1.4f), 5, 34);
 		float radiusBase = MathUtils.clamp(0.035f + impact.intensity * 0.011f + impact.size * 0.012f, 0.04f, 0.24f);
@@ -192,15 +190,10 @@ public class WaterSplashSystem {
 		trimParticles();
 	}
 
-	private void spawnSurfaceWave(WaterImpact impact, Eau water, float waterAlpha){
+	private void applySurfaceImpact(WaterImpact impact, Eau water, float waterAlpha){
 		float amplitude = calculateWaveAmplitude(impact.downwardSpeed, impact.mass, impact.size, impact.intensity);
-		float maxHalfWidth = calculateWaveHalfWidth(impact.totalSpeed, impact.mass, impact.size, impact.intensity);
-		float wavelength = calculateWaveLength(impact.size, impact.intensity);
-		float lifetime = MathUtils.clamp(0.75f + (float)Math.sqrt(Math.max(0.02f, impact.mass)) * 0.18f
-				+ impact.intensity * 0.035f, 0.75f, 1.85f);
 		float alpha = capToWaterAlpha(waterAlpha * 0.72f, waterAlpha);
-		waves.add(SurfaceWave.fromImpact(water, impact.point, amplitude, maxHalfWidth, wavelength, lifetime, alpha));
-		trimWaves();
+		getSurfaceSimulation(water).applyImpact(water.getSurfaceLocalX(impact.point), amplitude, impact.size, alpha);
 	}
 
 	private void updateDroplet(SplashParticle particle, float delta){
@@ -333,50 +326,40 @@ public class WaterSplashSystem {
 				particle.water.getSurfaceAngleDegrees());
 	}
 
-	private void drawSurfaceWaves(SpriteBatch batch, TextureRegion region, Color waterColor){
-		for(SurfaceWave wave : waves){
-			if(wave.water == null)
+	private void drawWaterSurfaces(SpriteBatch batch, TextureRegion region, Color waterColor){
+		for(WaterSurfaceSimulation simulation : surfaceSimulations){
+			if(!simulation.hasMotion())
 				continue;
-			int segmentCount = collectWaveBounds(wave.centerLocalX, wave.renderHalfWidth(),
-					wave.water.getSurfaceHalfWidth(), rippleSegments);
-			for(int i = 0; i < segmentCount; i++)
-				drawSurfaceWaveSegment(batch, region, wave, waterColor, rippleSegments[i]);
+			drawWaterSurface(batch, region, simulation, waterColor);
 		}
 	}
 
-	private void drawSurfaceWaveSegment(SpriteBatch batch, TextureRegion region, SurfaceWave wave, Color waterColor,
-			RippleSegment bounds){
-		float step = MathUtils.clamp(wave.wavelength / 6f, 0.12f, 0.34f);
-		float start = bounds.start;
-		while(start < bounds.end){
-			float end = Math.min(start + step, bounds.end);
-			float startOffset = wave.surfaceOffset(start);
-			float endOffset = wave.surfaceOffset(end);
-			wave.water.getSurfacePoint(start, startOffset, waveStartPoint);
-			wave.water.getSurfacePoint(end, endOffset, waveEndPoint);
-
-			float length = waveStartPoint.dst(waveEndPoint);
-			if(length > 0.01f){
-				drawPoint.set(waveStartPoint).add(waveEndPoint).scl(0.5f);
-				float alpha = capToWaterAlpha(wave.renderAlpha() * bounds.alphaScale, waterAlpha(waterColor));
-				if(alpha > 0f){
-					batch.setColor(waterColor.r, waterColor.g, waterColor.b, alpha);
-					float angle = (float)Math.atan2(waveEndPoint.y - waveStartPoint.y,
-							waveEndPoint.x - waveStartPoint.x) * MathUtils.radiansToDegrees;
-					float thickness = wave.renderThickness();
-					batch.draw(region,
-							drawPoint.x - length * 0.5f,
-							drawPoint.y - thickness * 0.5f,
-							length * 0.5f,
-							thickness * 0.5f,
-							length,
-							thickness,
-							1,
-							1,
-							angle);
-				}
-			}
-			start = end;
+	private void drawWaterSurface(SpriteBatch batch, TextureRegion region, WaterSurfaceSimulation simulation,
+			Color waterColor){
+		float alpha = capToWaterAlpha(simulation.renderAlpha(), waterAlpha(waterColor));
+		if(alpha <= 0f)
+			return;
+		batch.setColor(waterColor.r, waterColor.g, waterColor.b, alpha);
+		for(int i = 0; i < simulation.sampleCount - 1; i++){
+			simulation.water.getSurfacePoint(simulation.localX(i), simulation.displacement(i), surfaceStartPoint);
+			simulation.water.getSurfacePoint(simulation.localX(i + 1), simulation.displacement(i + 1), surfaceEndPoint);
+			float length = surfaceStartPoint.dst(surfaceEndPoint);
+			if(length <= 0.01f)
+				continue;
+			drawPoint.set(surfaceStartPoint).add(surfaceEndPoint).scl(0.5f);
+			float angle = (float)Math.atan2(surfaceEndPoint.y - surfaceStartPoint.y,
+					surfaceEndPoint.x - surfaceStartPoint.x) * MathUtils.radiansToDegrees;
+			float thickness = simulation.renderThickness();
+			batch.draw(region,
+					drawPoint.x - length * 0.5f,
+					drawPoint.y - thickness * 0.5f,
+					length * 0.5f,
+					thickness * 0.5f,
+					length,
+					thickness,
+					1,
+					1,
+					angle);
 		}
 	}
 
@@ -402,11 +385,6 @@ public class WaterSplashSystem {
 			particles.removeIndex(0);
 	}
 
-	private void trimWaves(){
-		while(waves.size > MAX_WAVES)
-			waves.removeIndex(0);
-	}
-
 	private boolean removeOldestLandedParticle(){
 		for(int i = 0; i < particles.size; i++){
 			if(!particles.get(i).isAirborne()){
@@ -414,6 +392,22 @@ public class WaterSplashSystem {
 				return true;
 			}
 		}
+		return false;
+	}
+
+	private WaterSurfaceSimulation getSurfaceSimulation(Eau water){
+		for(WaterSurfaceSimulation simulation : surfaceSimulations)
+			if(simulation.water == water)
+				return simulation;
+		WaterSurfaceSimulation simulation = new WaterSurfaceSimulation(water, water.getSurfaceHalfWidth());
+		surfaceSimulations.add(simulation);
+		return simulation;
+	}
+
+	private boolean hasActiveSurfaceSimulation(){
+		for(WaterSurfaceSimulation simulation : surfaceSimulations)
+			if(simulation.hasMotion())
+				return true;
 		return false;
 	}
 
@@ -439,28 +433,6 @@ public class WaterSplashSystem {
 		return count;
 	}
 
-	static int collectWaveBounds(float centerLocalX, float halfWidth, float waterHalfWidth, RippleSegment[] segments){
-		if(segments == null || segments.length == 0 || halfWidth <= 0f || waterHalfWidth <= 0f)
-			return 0;
-
-		int count = 0;
-		float start = centerLocalX - halfWidth;
-		float end = centerLocalX + halfWidth;
-		count = addClippedRippleSegment(segments, count, start, end, -waterHalfWidth, waterHalfWidth, 1f);
-
-		if(start < -waterHalfWidth){
-			float reflectedEnd = Math.min(-waterHalfWidth + (-waterHalfWidth - start), waterHalfWidth);
-			count = addClippedRippleSegment(segments, count, -waterHalfWidth, reflectedEnd, -waterHalfWidth,
-					waterHalfWidth, WAVE_BOUNCE_ALPHA);
-		}
-		if(end > waterHalfWidth){
-			float reflectedStart = Math.max(waterHalfWidth - (end - waterHalfWidth), -waterHalfWidth);
-			count = addClippedRippleSegment(segments, count, reflectedStart, waterHalfWidth, -waterHalfWidth,
-					waterHalfWidth, WAVE_BOUNCE_ALPHA);
-		}
-		return count;
-	}
-
 	static float randomDropAlpha(float waterAlpha, float randomRatio){
 		float safeWaterAlpha = MathUtils.clamp(waterAlpha, 0f, 1f);
 		return safeWaterAlpha * MathUtils.clamp(randomRatio, 0.5f, 1f);
@@ -477,20 +449,6 @@ public class WaterSplashSystem {
 		float safeIntensity = Math.max(0f, intensity);
 		return MathUtils.clamp(speed * 0.018f + (float)Math.sqrt(safeMass) * 0.045f
 				+ safeSize * 0.018f + safeIntensity * 0.012f, 0.035f, 0.42f);
-	}
-
-	static float calculateWaveHalfWidth(float totalSpeed, float mass, float size, float intensity){
-		float safeSpeed = Math.max(0f, totalSpeed);
-		float safeMass = Math.max(0.02f, mass);
-		float safeSize = Math.max(0.1f, size);
-		float safeIntensity = Math.max(0f, intensity);
-		return MathUtils.clamp(0.45f + safeSize * 0.62f + safeIntensity * 0.2f
-				+ safeSpeed * 0.08f + (float)Math.sqrt(safeMass) * 0.18f, 0.65f, 7f);
-	}
-
-	static float calculateWaveLength(float size, float intensity){
-		return MathUtils.clamp(0.42f + Math.max(0.1f, size) * 0.22f + Math.max(0f, intensity) * 0.045f,
-				0.45f, 2.15f);
 	}
 
 	private float cappedRenderAlpha(SplashParticle particle, Color waterColor){
@@ -529,75 +487,116 @@ public class WaterSplashSystem {
 		}
 	}
 
-	static final class SurfaceWave {
+	static final class WaterSurfaceSimulation {
 		final Eau water;
-		final float centerLocalX;
-		final float amplitude;
-		final float maxHalfWidth;
-		final float wavelength;
-		final float lifetime;
-		final float alpha;
-		float age;
+		final int sampleCount;
+		final float halfWidth;
+		final float sampleSpacing;
+		final float[] displacements;
+		final float[] velocities;
+		final float[] leftDeltas;
+		final float[] rightDeltas;
+		float alpha;
+		float energy;
 
-		private SurfaceWave(Eau water, float centerLocalX, float amplitude, float maxHalfWidth, float wavelength,
-				float lifetime, float alpha){
+		WaterSurfaceSimulation(Eau water, float halfWidth){
 			this.water = water;
-			this.centerLocalX = centerLocalX;
-			this.amplitude = amplitude;
-			this.maxHalfWidth = maxHalfWidth;
-			this.wavelength = wavelength;
-			this.lifetime = lifetime;
-			this.alpha = alpha;
+			this.halfWidth = Math.max(0.1f, halfWidth);
+			sampleCount = calculateSurfaceSampleCount(this.halfWidth);
+			sampleSpacing = (this.halfWidth * 2f) / (sampleCount - 1);
+			displacements = new float[sampleCount];
+			velocities = new float[sampleCount];
+			leftDeltas = new float[sampleCount];
+			rightDeltas = new float[sampleCount];
 		}
 
-		static SurfaceWave fromImpact(Eau water, Vector2 impactPoint, float amplitude, float maxHalfWidth,
-				float wavelength, float lifetime, float alpha){
-			return new SurfaceWave(water, water.getSurfaceLocalX(impactPoint), amplitude, maxHalfWidth, wavelength,
-					lifetime, alpha);
+		void applyImpact(float localX, float amplitude, float size, float alpha){
+			this.alpha = Math.max(this.alpha, alpha);
+			energy = Math.max(energy, amplitude);
+			int center = nearestSample(localX);
+			float radius = Math.max(sampleSpacing * 1.5f, size * 0.5f);
+			int sampleRadius = Math.max(1, MathUtils.ceil(radius / sampleSpacing));
+			for(int offset = -sampleRadius; offset <= sampleRadius; offset++){
+				int index = center + offset;
+				if(index < 0 || index >= sampleCount)
+					continue;
+				float falloff = 1f - Math.abs(offset) / (float)(sampleRadius + 1);
+				falloff *= falloff;
+				displacements[index] -= amplitude * 0.42f * falloff;
+				velocities[index] -= amplitude * 16f * falloff;
+			}
 		}
 
 		void update(float delta){
-			age += delta;
+			if(!hasMotion())
+				return;
+			float clampedDelta = Math.min(delta, 1f / 30f);
+			for(int i = 0; i < sampleCount; i++){
+				float acceleration = -SURFACE_STIFFNESS * displacements[i] - SURFACE_DAMPING * velocities[i];
+				velocities[i] += acceleration * clampedDelta;
+				displacements[i] += velocities[i] * clampedDelta;
+			}
+			for(int pass = 0; pass < 8; pass++){
+				for(int i = 0; i < sampleCount; i++){
+					if(i > 0){
+						leftDeltas[i] = SURFACE_SPREAD * clampedDelta * (displacements[i] - displacements[i - 1]);
+						velocities[i - 1] += leftDeltas[i];
+					}
+					if(i < sampleCount - 1){
+						rightDeltas[i] = SURFACE_SPREAD * clampedDelta * (displacements[i] - displacements[i + 1]);
+						velocities[i + 1] += rightDeltas[i];
+					}
+				}
+				for(int i = 0; i < sampleCount; i++){
+					if(i > 0)
+						displacements[i - 1] += leftDeltas[i];
+					if(i < sampleCount - 1)
+						displacements[i + 1] += rightDeltas[i];
+				}
+			}
+			float maxEnergy = 0f;
+			for(int i = 0; i < sampleCount; i++)
+				maxEnergy = Math.max(maxEnergy, Math.abs(displacements[i]) + Math.abs(velocities[i]) * 0.035f);
+			energy = maxEnergy;
+			alpha *= 0.985f;
+			if(energy < 0.0025f){
+				for(int i = 0; i < sampleCount; i++){
+					displacements[i] = 0f;
+					velocities[i] = 0f;
+				}
+				energy = 0f;
+				alpha = 0f;
+			}
 		}
 
-		boolean isExpired(){
-			return age >= lifetime;
-		}
-
-		float progress(){
-			if(lifetime <= 0f)
-				return 1f;
-			return MathUtils.clamp(age / lifetime, 0f, 1f);
-		}
-
-		float smoothProgress(){
-			float progress = progress();
-			return progress * progress * (3f - 2f * progress);
-		}
-
-		float renderHalfWidth(){
-			return MathUtils.lerp(Math.min(0.28f, maxHalfWidth), maxHalfWidth, smoothProgress());
+		boolean hasMotion(){
+			return energy > 0.0025f || alpha > 0.01f;
 		}
 
 		float renderAlpha(){
-			return alpha * (1f - smoothProgress());
+			return alpha * MathUtils.clamp(energy * 4.2f, 0f, 1f);
 		}
 
 		float renderThickness(){
-			return Math.max(0.012f, amplitude * 0.28f);
+			return MathUtils.clamp(0.018f + energy * 0.06f, 0.018f, 0.075f);
 		}
 
-		float surfaceOffset(float localX){
-			float halfWidth = renderHalfWidth();
-			if(halfWidth <= 0f)
-				return 0f;
-			float distance = Math.abs(localX - centerLocalX);
-			if(distance > halfWidth)
-				return 0f;
-			float envelope = 1f - distance / halfWidth;
-			envelope *= envelope;
-			float phase = (distance / Math.max(0.1f, wavelength)) * MathUtils.PI2 - progress() * MathUtils.PI2 * 1.35f;
-			return (float)Math.sin(phase) * amplitude * (1f - smoothProgress() * 0.65f) * envelope;
+		float localX(int index){
+			return -halfWidth + sampleSpacing * index;
 		}
+
+		float displacement(int index){
+			return displacements[index];
+		}
+
+		int nearestSample(float localX){
+			float normalized = (MathUtils.clamp(localX, -halfWidth, halfWidth) + halfWidth) / (halfWidth * 2f);
+			return MathUtils.clamp(Math.round(normalized * (sampleCount - 1)), 0, sampleCount - 1);
+		}
+	}
+
+	static int calculateSurfaceSampleCount(float halfWidth){
+		return MathUtils.clamp(MathUtils.ceil((Math.max(0.1f, halfWidth) * 2f) / SURFACE_SAMPLE_SPACING) + 1,
+				12, 96);
 	}
 }
