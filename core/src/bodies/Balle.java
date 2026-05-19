@@ -208,9 +208,12 @@ public class Balle {
 	}
 
 	public void restart(){
+		body.setActive(true);
+		body.setAwake(true);
 		body.setLinearVelocity(0, 0);
 		body.setAngularVelocity(0);
 		body.setTransform(getOrigine(), body.getAngle());
+		body.setAwake(true);
 		restartDelay = 3f;
 		restart = false;
 		droite = false;

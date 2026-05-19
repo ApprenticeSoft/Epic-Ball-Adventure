@@ -187,6 +187,18 @@ public class Obstacle extends PolygonShape{
 	}
 
 	public void initiate(){
+	}
+
+	protected void resetBodyToInitial(){
+		if(body == null)
+			return;
+		body.setActive(true);
+		body.setAwake(true);
+		body.setLinearVelocity(0, 0);
+		body.setAngularVelocity(0);
+		Vector2 resetPosition = initialPosition == null ? new Vector2(posX, posY) : initialPosition;
+		body.setTransform(resetPosition, angle);
+		body.setAwake(true);
 
 	}
 }

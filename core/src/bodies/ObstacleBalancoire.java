@@ -190,8 +190,6 @@ public class ObstacleBalancoire extends Obstacle{
 
 	@Override
 	public void initiate(){
-		body.setLinearVelocity(0, 0);
-		body.setAngularVelocity(0);
-		body.setTransform(initialPosition, angle);
+		resetBodyToInitial();
 	}
 }

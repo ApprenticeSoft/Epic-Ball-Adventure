@@ -54,7 +54,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.one.button.jam.Couleurs;
 import com.one.button.jam.MyGdxGame;
 
-public class LevelEditorScreen extends InputAdapter implements Screen {
+public class LevelEditorScreen extends InputAdapter implements Screen, EditorBrowserBridge.PanHandler {
 	private static final float LEFT_PANEL_WIDTH = 300f;
 	private static final float RIGHT_PANEL_WIDTH = 230f;
 	private static final float MIN_ZOOM = 0.12f;
@@ -175,19 +175,19 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		public boolean touchDown(int screenX, int screenY, int pointer, int button) {
 			if(button != Buttons.RIGHT || !isWorldScreen(screenX, screenY))
 				return false;
-			return beginPanDrag(screenX, screenY);
+			return beginPanDrag(screenX, screenY, button);
 		}
 
 		@Override
 		public boolean touchDragged(int screenX, int screenY, int pointer) {
-			if(dragMode != DragMode.PAN)
+			if(!isActivePanPointer(pointer))
 				return false;
 			return LevelEditorScreen.this.touchDragged(screenX, screenY, pointer);
 		}
 
 		@Override
 		public boolean touchUp(int screenX, int screenY, int pointer, int button) {
-			if(dragMode != DragMode.PAN)
+			if(!isActivePanRelease(pointer, button))
 				return false;
 			return LevelEditorScreen.this.touchUp(screenX, screenY, pointer, button);
 		}
@@ -216,6 +216,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public void show() {
+		EditorBrowserBridge.setEditorPanHandler(this);
 		EditorBrowserBridge.setEditorShortcutsActive(true);
 		Gdx.graphics.setContinuousRendering(true);
 		Gdx.input.setInputProcessor(new InputMultiplexer(worldMouseInput, stage, this));
@@ -325,7 +326,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		draggedPointIndex = -1;
 		dragUndoRecorded = false;
 		if(button == Buttons.RIGHT){
-			return beginPanDrag(screenX, screenY);
+			return beginPanDrag(screenX, screenY, button);
 		}
 		if(activePaletteType != null){
 			EditorObjectType placementType = activePaletteType;
@@ -362,6 +363,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	@Override
 	public boolean touchDragged(int screenX, int screenY, int pointer) {
 		if(dragMode == DragMode.PAN){
+			if(!isActivePanPointer(pointer))
+				return false;
 			panByMouseDrag(screenX, screenY);
 			return true;
 		}
@@ -387,13 +390,15 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+		if(dragMode == DragMode.PAN){
+			if(!isActivePanRelease(pointer, button))
+				return false;
+			endPanDrag(screenX, screenY);
+			return true;
+		}
 		if(dragMode != DragMode.NONE){
 			boolean editedObject = dragMode != DragMode.PAN;
-			dragMode = DragMode.NONE;
-			draggedPointIndex = -1;
-			resizeHorizontal = 0;
-			resizeVertical = 0;
-			dragUndoRecorded = false;
+			clearDragState();
 			if(editedObject)
 				buildLeftPanel();
 			updateHover(screenX, screenY);
@@ -413,9 +418,33 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 
 	@Override
 	public void pause() {
+		cancelDrag();
 	}
 
-	private boolean beginPanDrag(int screenX, int screenY){
+	@Override
+	public void onBrowserPanStart(int screenX, int screenY) {
+		if(!isWorldScreen(screenX, screenY))
+			return;
+		beginPanDrag(screenX, screenY, Buttons.RIGHT);
+	}
+
+	@Override
+	public void onBrowserPanMove(int screenX, int screenY) {
+		if(dragMode != DragMode.PAN)
+			return;
+		panByMouseDrag(screenX, screenY);
+	}
+
+	@Override
+	public void onBrowserPanEnd(int screenX, int screenY) {
+		if(dragMode != DragMode.PAN)
+			return;
+		endPanDrag(screenX, screenY);
+	}
+
+	private boolean beginPanDrag(int screenX, int screenY, int button){
+		if(button != Buttons.RIGHT)
+			return false;
 		dragMode = DragMode.PAN;
 		draggedPointIndex = -1;
 		dragUndoRecorded = false;
@@ -424,18 +453,49 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		return true;
 	}
 
+	private boolean isActivePanPointer(int pointer){
+		return dragMode == DragMode.PAN;
+	}
+
+	private boolean isActivePanRelease(int pointer, int button){
+		return dragMode == DragMode.PAN;
+	}
+
+	private void endPanDrag(int screenX, int screenY){
+		clearDragState();
+		updateHover(screenX, screenY);
+		logCamera();
+	}
+
+	private void clearDragState(){
+		dragMode = DragMode.NONE;
+		draggedPointIndex = -1;
+		resizeHorizontal = 0;
+		resizeVertical = 0;
+		dragUndoRecorded = false;
+	}
+
+	private void cancelDrag(){
+		clearDragState();
+		markHoverDirty();
+	}
+
 	@Override
 	public void resume() {
 	}
 
 	@Override
 	public void hide() {
+		cancelDrag();
 		EditorBrowserBridge.setEditorShortcutsActive(false);
+		EditorBrowserBridge.setEditorPanHandler(null);
 	}
 
 	@Override
 	public void dispose() {
+		cancelDrag();
 		EditorBrowserBridge.setEditorShortcutsActive(false);
+		EditorBrowserBridge.setEditorPanHandler(null);
 		stage.dispose();
 		shapes.dispose();
 		if(editorFont != null)

@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { PNG } from 'pngjs';
 
+test('web entrypoint uses the current bundle cache token', async ({ page }) => {
+  await page.goto('/');
+
+  const scriptSource = await page.locator('script[src*="html.nocache.js"]').getAttribute('src');
+
+  expect(scriptSource).toContain('20260519-visible-waves-pan-restart1');
+});
+
 test('auto-advances through every level without a black screen', async ({ page }, testInfo) => {
   const logs = [];
   const errors = [];
@@ -259,6 +267,19 @@ test('desktop editor keeps right-drag pan and wheel zoom after object placement'
     const afterPan = parseEditorCameraEvent(await latestDebugEvent(page, 'level editor camera'));
 
     const afterPanCount = (await getDebugEvents(page)).filter(line => line.includes('level editor camera')).length;
+    await page.mouse.move(590, 455, { steps: 6 });
+    await page.waitForTimeout(200);
+    const afterReleaseCount = (await getDebugEvents(page)).filter(line => line.includes('level editor camera')).length;
+    expect(afterReleaseCount).toBe(afterPanCount);
+
+    const contextMenuPrevented = await page.evaluate(() => {
+      const target = document.querySelector('canvas') || document.getElementById('embed-html');
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(contextMenuPrevented).toBe(true);
+
     await page.mouse.wheel(0, -360);
     await waitForDebugEventCount(page, 'level editor camera', afterPanCount + 1, 10000);
     const afterZoom = parseEditorCameraEvent(await latestDebugEvent(page, 'level editor camera'));

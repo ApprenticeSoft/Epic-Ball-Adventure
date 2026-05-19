@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.BodyDef.BodyType;
 import org.junit.jupiter.api.Test;
@@ -142,6 +143,30 @@ public class WaterSplashSystemTest {
 	public void visibleWaveCountIsClamped(){
 		assertEquals(2, WaterSplashSystem.calculateVisibleWaveCount(0f, 0f, 0f, 0f));
 		assertEquals(10, WaterSplashSystem.calculateVisibleWaveCount(100f, 100f, 100f, 100f));
+	}
+
+	@Test
+	public void visibleWaveAlphaIsReadableAndCappedByWaterAlpha(){
+		WaterSplashSystem.TravelingWave wave =
+				new WaterSplashSystem.TravelingWave(0f, 1, 0.35f, 0.5f, 2f, 0.4f, 0f);
+
+		float alpha = WaterSplashSystem.calculateWaveRenderAlpha(wave, 0.55f);
+
+		assertTrue(alpha > 0.25f);
+		assertTrue(alpha <= 0.55f);
+	}
+
+	@Test
+	public void crestAndTroughUseDifferentVisibleColors(){
+		Color water = new Color(0f, 0.53f, 0.32f, 0.55f);
+		Color crest = WaterSplashSystem.setWaveColor(water, true, 0.55f, new Color());
+		Color trough = WaterSplashSystem.setWaveColor(water, false, 0.55f, new Color());
+
+		assertTrue(crest.r > trough.r);
+		assertTrue(crest.g > trough.g);
+		assertTrue(crest.b > trough.b);
+		assertEquals(0.55f, crest.a, 0.0001f);
+		assertEquals(0.55f, trough.a, 0.0001f);
 	}
 
 	@Test

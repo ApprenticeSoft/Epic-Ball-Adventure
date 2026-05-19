@@ -42,10 +42,10 @@ public class WaterSplashSystem {
 	private static final float TRAVELING_WAVE_DAMPING_PER_SECOND = 0.935f;
 	private static final float TRAVELING_WAVE_MIN_AMPLITUDE = 0.01f;
 	private static final float TRAVELING_WAVE_MAX_AGE = 18f;
-	private static final float VISUAL_WAVE_MIN_ALPHA = 0.1f;
-	private static final float VISUAL_WAVE_MAX_ALPHA = 0.82f;
-	private static final float VISUAL_WAVE_MIN_THICKNESS = 0.025f;
-	private static final float VISUAL_WAVE_MAX_THICKNESS = 0.11f;
+	private static final float VISUAL_WAVE_MIN_ALPHA = 0.34f;
+	private static final float VISUAL_WAVE_MAX_ALPHA = 1f;
+	private static final float VISUAL_WAVE_MIN_THICKNESS = 0.075f;
+	private static final float VISUAL_WAVE_MAX_THICKNESS = 0.24f;
 
 	private final World world;
 	private final Array<Eau> waters;
@@ -60,6 +60,7 @@ public class WaterSplashSystem {
 	private final Vector2 rippleEndPoint = new Vector2();
 	private final Vector2 surfaceAngleStartPoint = new Vector2();
 	private final Vector2 surfaceAngleEndPoint = new Vector2();
+	private final Color waveColor = new Color();
 	private final RippleSegment[] rippleSegments = new RippleSegment[]{
 			new RippleSegment(), new RippleSegment(), new RippleSegment()
 	};
@@ -223,6 +224,11 @@ public class WaterSplashSystem {
 		float alpha = capToWaterAlpha(waterAlpha * 0.72f, waterAlpha);
 		getSurfaceSimulation(water).applyImpact(water.getSurfaceLocalX(impact.point), amplitude, impact.size, alpha,
 				visibleWaveCount);
+		DebugConfig.log("water impact waves=" + visibleWaveCount
+				+ " amplitude=" + number(amplitude)
+				+ " speed=" + number(impact.downwardSpeed)
+				+ " mass=" + number(impact.mass)
+				+ " size=" + number(impact.size));
 	}
 
 	private void updateDroplet(SplashParticle particle, float delta){
@@ -377,14 +383,9 @@ public class WaterSplashSystem {
 
 	private void drawTravelingWave(SpriteBatch batch, TextureRegion region, Eau water, TravelingWave wave,
 			Color waterColor, float waterAlpha){
-		float alpha = capToWaterAlpha(wave.visualAlpha() * waterAlpha, waterAlpha);
+		float alpha = calculateWaveRenderAlpha(wave, waterAlpha);
 		if(alpha <= 0.01f || wave.visualLength() <= 0.01f)
 			return;
-		float colorScale = wave.polarity >= 0f ? 1.28f : 0.68f;
-		float red = MathUtils.clamp((waterColor == null ? 1f : waterColor.r) * colorScale, 0f, 1f);
-		float green = MathUtils.clamp((waterColor == null ? 1f : waterColor.g) * colorScale, 0f, 1f);
-		float blue = MathUtils.clamp((waterColor == null ? 1f : waterColor.b) * colorScale, 0f, 1f);
-		batch.setColor(red, green, blue, alpha);
 
 		float halfLength = wave.visualLength() * 0.5f;
 		float start = Math.max(wave.centerX - halfLength, -water.getSurfaceHalfWidth());
@@ -392,9 +393,26 @@ public class WaterSplashSystem {
 		float length = end - start;
 		if(length <= 0.01f)
 			return;
+		if(wave.polarity > 0f){
+			setWaveColor(waterColor, false, alpha * 0.42f, waveColor);
+			drawTravelingWaveSegments(batch, region, water, start, end, wave.visualThickness() * 2.4f, waveColor);
+			setWaveColor(waterColor, true, alpha, waveColor);
+			drawTravelingWaveSegments(batch, region, water, start, end, wave.visualThickness(), waveColor);
+		}
+		else{
+			setWaveColor(waterColor, false, alpha * 0.9f, waveColor);
+			drawTravelingWaveSegments(batch, region, water, start, end, wave.visualThickness() * 1.8f, waveColor);
+		}
+	}
+
+	private void drawTravelingWaveSegments(SpriteBatch batch, TextureRegion region, Eau water, float start, float end,
+			float thickness, Color color){
+		float length = end - start;
+		if(length <= 0.01f || thickness <= 0f || color.a <= 0f)
+			return;
+		batch.setColor(color);
 		int subSegmentCount = MathUtils.clamp(MathUtils.ceil(length / SURFACE_SAMPLE_SPACING), 1, 64);
 		float step = length / subSegmentCount;
-		float thickness = wave.visualThickness();
 		for(int i = 0; i < subSegmentCount; i++){
 			float segmentStart = start + step * i;
 			float segmentEnd = i == subSegmentCount - 1 ? end : segmentStart + step;
@@ -542,6 +560,36 @@ public class WaterSplashSystem {
 				+ safeSize * 0.62f + safeIntensity * 0.2f), MIN_VISIBLE_WAVES, MAX_VISIBLE_WAVES);
 	}
 
+	static float calculateWaveRenderAlpha(TravelingWave wave, float waterAlpha){
+		if(wave == null)
+			return 0f;
+		return capToWaterAlpha(wave.visualAlpha() * MathUtils.clamp(waterAlpha, 0f, 1f), waterAlpha);
+	}
+
+	static Color setWaveColor(Color waterColor, boolean crest, float alpha, Color out){
+		Color target = out == null ? new Color() : out;
+		float waterRed = waterColor == null ? 0f : waterColor.r;
+		float waterGreen = waterColor == null ? 0.45f : waterColor.g;
+		float waterBlue = waterColor == null ? 0.65f : waterColor.b;
+		if(crest){
+			target.set(MathUtils.clamp(waterRed + 0.72f, 0f, 1f),
+					MathUtils.clamp(waterGreen + 0.62f, 0f, 1f),
+					MathUtils.clamp(waterBlue + 0.64f, 0f, 1f),
+					MathUtils.clamp(alpha, 0f, 1f));
+		}
+		else{
+			target.set(MathUtils.clamp(waterRed * 0.08f, 0f, 1f),
+					MathUtils.clamp(waterGreen * 0.2f, 0f, 1f),
+					MathUtils.clamp(waterBlue * 0.35f + 0.05f, 0f, 1f),
+					MathUtils.clamp(alpha, 0f, 1f));
+		}
+		return target;
+	}
+
+	private static String number(float value){
+		return Float.toString(MathUtils.round(value * 1000f) / 1000f);
+	}
+
 	static boolean findWaterSurfaceHitLocal(Vector2 localFrom, Vector2 localTo, float radius, float halfWidth,
 			SurfaceSampler surfaceSampler, WaterSurfaceHit out){
 		out.clear();
@@ -682,8 +730,8 @@ public class WaterSplashSystem {
 		}
 
 		void applyImpact(float localX, float amplitude, float size, float alpha){
-			applyImpact(localX, amplitude, size, alpha, calculateVisibleWaveCount(amplitude * 8f, amplitude * amplitude,
-					size, amplitude * 5f));
+			applyImpact(localX, amplitude, size, alpha, calculateVisibleWaveCount(amplitude * 11f,
+					amplitude * amplitude * 4f, size, amplitude * 8f));
 		}
 
 		void applyImpact(float localX, float amplitude, float size, float alpha, int visibleWaveCount){
@@ -828,15 +876,15 @@ public class WaterSplashSystem {
 		private void spawnTravelingWaves(float localX, float amplitude, float size, int visibleWaveCount){
 			int waveCount = MathUtils.clamp(visibleWaveCount, MIN_VISIBLE_WAVES, MAX_VISIBLE_WAVES);
 			float startX = MathUtils.clamp(localX, -halfWidth, halfWidth);
-			float spacing = MathUtils.clamp(0.26f + size * 0.12f + amplitude * 0.12f, sampleSpacing * 1.7f,
+			float spacing = MathUtils.clamp(0.3f + size * 0.15f + amplitude * 0.14f, sampleSpacing * 1.9f,
 					Math.max(sampleSpacing * 2.4f, halfWidth * 0.35f));
-			float width = MathUtils.clamp(spacing * 0.74f, sampleSpacing * 1.25f, halfWidth * 0.24f);
+			float width = MathUtils.clamp(spacing * 0.58f, sampleSpacing * 1.15f, halfWidth * 0.18f);
 			for(int i = 0; i < waveCount; i++){
 				int direction = i % 2 == 0 ? 1 : -1;
 				int rank = i / 2;
 				float falloff = (float)Math.pow(0.86f, rank);
 				float polarity = rank % 2 == 0 ? -0.82f : 1f;
-				float waveAmplitude = amplitude * (0.36f + waveCount * 0.018f) * falloff;
+				float waveAmplitude = amplitude * (0.52f + waveCount * 0.026f) * falloff;
 				float speed = TRAVELING_WAVE_BASE_SPEED + amplitude * TRAVELING_WAVE_SPEED_SCALE
 						+ size * 0.08f + rank * 0.035f;
 				float offset = sampleSpacing * 0.6f + spacing * rank;
@@ -949,7 +997,7 @@ public class WaterSplashSystem {
 		}
 
 		float visualLength(){
-			return width * 2f;
+			return width * 2.45f;
 		}
 
 		float visualAlpha(){
