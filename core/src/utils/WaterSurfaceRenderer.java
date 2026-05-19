@@ -61,9 +61,9 @@ final class WaterSurfaceRenderer {
 		for(int i = 0; i < coordCount; i += 2){
 			float localX = polygonVertices[i];
 			float localY = polygonVertices[i + 1];
-			water.body.getWorldPoint(worldPoint.set(localX, localY));
-			renderVertices[vertexIndex++] = worldPoint.x;
-			renderVertices[vertexIndex++] = worldPoint.y;
+			Vector2 transformedPoint = water.body.getWorldPoint(worldPoint.set(localX, localY));
+			renderVertices[vertexIndex++] = transformedPoint.x;
+			renderVertices[vertexIndex++] = transformedPoint.y;
 			renderVertices[vertexIndex++] = packedColor;
 			renderVertices[vertexIndex++] = MathUtils.lerp(u, u2, (localX + halfWidth) / safeWidth);
 			renderVertices[vertexIndex++] = MathUtils.lerp(v2, v, (localY - minY) / safeHeight);
