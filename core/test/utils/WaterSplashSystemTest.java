@@ -176,9 +176,25 @@ public class WaterSplashSystemTest {
 		wave.update(0.02f, 1f);
 
 		assertEquals(-1, wave.direction);
-		assertEquals(9f, wave.speed, 0.0001f);
+		assertEquals(8.5f, wave.speed, 0.0001f);
 		assertEquals(0.368f, wave.width, 0.0001f);
 		assertEquals(1, wave.bounceCount);
+		assertFalse(wave.isExpired());
+	}
+
+	@Test
+	public void mergingTravelingWaveKeepsMovingWhileFading(){
+		WaterSplashSystem.TravelingWave wave =
+				new WaterSplashSystem.TravelingWave(0f, 1, 0.03f, 0.5f, 2f, 0.4f, 0f);
+
+		assertTrue(wave.update(1f / 60f, 2f));
+		float mergeStartCenter = wave.centerX;
+		float mergeStartAlpha = wave.visualAlpha();
+
+		wave.update(0.5f, 2f);
+
+		assertTrue(wave.centerX > mergeStartCenter);
+		assertTrue(wave.visualAlpha() < mergeStartAlpha);
 		assertFalse(wave.isExpired());
 	}
 
@@ -198,6 +214,16 @@ public class WaterSplashSystemTest {
 		wave.update(0.7f, 2f);
 
 		assertTrue(wave.isExpired());
+	}
+
+	@Test
+	public void travelingWaveVisualEnvelopeRoundsAndTapersEdges(){
+		WaterSplashSystem.TravelingWave wave =
+				new WaterSplashSystem.TravelingWave(0f, 1, 0.35f, 0.5f, 2f, 0.4f, 0f);
+
+		assertEquals(1f, wave.visualEnvelopeAt(0f), 0.0001f);
+		assertTrue(wave.visualEnvelopeAt(0.35f) > wave.visualEnvelopeAt(0.48f));
+		assertEquals(0f, wave.visualEnvelopeAt(wave.visualLength()), 0.0001f);
 	}
 
 	@Test

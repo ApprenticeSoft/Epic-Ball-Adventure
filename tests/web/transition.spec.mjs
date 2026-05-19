@@ -6,7 +6,7 @@ test('web entrypoint uses the current bundle cache token', async ({ page }) => {
 
   const scriptSource = await page.locator('script[src*="html.nocache.js"]').getAttribute('src');
 
-  expect(scriptSource).toContain('20260519-wave-merge-pan2');
+  expect(scriptSource).toContain('20260519-left-pan-round-waves');
 });
 
 test('auto-advances through every level without a black screen', async ({ page }, testInfo) => {
@@ -237,7 +237,7 @@ test('desktop editor remains responsive while zooming and panning', async ({ pag
   }
 });
 
-test('desktop editor keeps right-drag pan and wheel zoom after object placement', async ({ page }, testInfo) => {
+test('desktop editor keeps left-drag object movement, background pan, and wheel zoom after object placement', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
 
   const logs = [];
@@ -257,27 +257,28 @@ test('desktop editor keeps right-drag pan and wheel zoom after object placement'
     await page.mouse.click(1165, 306);
     await page.mouse.click(720, 360);
 
+    await page.mouse.move(720, 360);
+    await page.mouse.down({ button: 'left' });
+    await page.mouse.move(760, 390, { steps: 8 });
+    await page.mouse.up({ button: 'left' });
+    await waitForDebugEvent(page, logs, 'level editor object edited mode=MOVE', 10000);
+    const afterObjectDrag = parseEditorCameraEvent(await latestDebugEvent(page, 'level editor camera'));
+    expect(Math.abs(afterObjectDrag.x)).toBeLessThan(1);
+    expect(Math.abs(afterObjectDrag.y)).toBeLessThan(1);
+
     const beforeEvents = await getDebugEvents(page);
     const beforeCount = beforeEvents.filter(line => line.includes('level editor camera')).length;
-    await page.mouse.move(720, 360);
-    await page.mouse.down({ button: 'right' });
-    await page.mouse.move(690, 377, { steps: 4 });
-    const activeContextMenuPrevented = await page.evaluate(() => {
-      const target = document.querySelector('canvas') || document.getElementById('embed-html');
-      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
-      target.dispatchEvent(event);
-      return event.defaultPrevented;
-    });
-    expect(activeContextMenuPrevented).toBe(true);
-
+    await page.mouse.move(420, 360);
+    await page.mouse.down({ button: 'left' });
     await page.mouse.move(560, 455, { steps: 16 });
     await waitForDebugEventCount(page, 'level editor camera', beforeCount + 4, 10000);
-    await page.mouse.up({ button: 'right' });
-    await waitForDebugEventCount(page, 'level editor camera', beforeCount + 1, 10000);
+    await page.mouse.up({ button: 'left' });
+    await waitForDebugEventCount(page, 'level editor camera', beforeCount + 5, 10000);
     const afterPan = parseEditorCameraEvent(await latestDebugEvent(page, 'level editor camera'));
 
     const afterPanCount = (await getDebugEvents(page)).filter(line => line.includes('level editor camera')).length;
-    await page.mouse.move(590, 455, { steps: 6 });
+    await page.mouse.move(720, 360);
+    await page.mouse.move(610, 490, { steps: 6 });
     await page.waitForTimeout(200);
     const afterReleaseCount = (await getDebugEvents(page)).filter(line => line.includes('level editor camera')).length;
     expect(afterReleaseCount).toBe(afterPanCount);

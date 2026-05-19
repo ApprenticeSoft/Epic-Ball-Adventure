@@ -39,7 +39,7 @@ public class WaterSplashSystem {
 	private static final float TRAVELING_WAVE_SPEED_SCALE = 1.05f;
 	private static final float TRAVELING_WAVE_SPEED_MULTIPLIER = 2f;
 	private static final float TRAVELING_WAVE_BOUNCE_DAMPING = 0.76f;
-	private static final float TRAVELING_WAVE_BOUNCE_SPEED_DAMPING = 0.90f;
+	private static final float TRAVELING_WAVE_BOUNCE_SPEED_DAMPING = 0.85f;
 	private static final float TRAVELING_WAVE_BOUNCE_SIZE_DAMPING = 0.92f;
 	private static final float TRAVELING_WAVE_DAMPING_PER_SECOND = 0.935f;
 	private static final float TRAVELING_WAVE_MERGE_AMPLITUDE = 0.035f;
@@ -51,6 +51,7 @@ public class WaterSplashSystem {
 	private static final float VISUAL_WAVE_MAX_ALPHA = 1f;
 	private static final float VISUAL_WAVE_MIN_THICKNESS = 0.075f;
 	private static final float VISUAL_WAVE_MAX_THICKNESS = 0.24f;
+	private static final float VISUAL_WAVE_SEGMENT_SPACING = SURFACE_SAMPLE_SPACING * 0.45f;
 
 	private final World world;
 	private final Array<Eau> waters;
@@ -192,11 +193,6 @@ public class WaterSplashSystem {
 
 	private void spawnImpact(WaterImpact impact, Eau water){
 		float waterAlpha = waterAlpha(water);
-		float rippleRadius = MathUtils.clamp(impact.size * 1.2f + impact.intensity * 0.18f, 0.45f, 5f);
-		float rippleAlpha = capToWaterAlpha(MathUtils.clamp(0.18f + impact.intensity * 0.035f, 0.22f, 0.75f),
-				waterAlpha);
-		particles.add(SplashParticle.ripple(water, impact.point, rippleRadius, 0.78f, rippleAlpha,
-				water.getSurfaceAngleDegrees()));
 		applySurfaceImpact(impact, water, waterAlpha);
 
 		int dropletCount = MathUtils.clamp(Math.round(4f + impact.intensity * 1.25f + impact.size * 1.4f), 5, 34);
@@ -400,27 +396,34 @@ public class WaterSplashSystem {
 			return;
 		if(wave.polarity > 0f){
 			setWaveColor(waterColor, false, alpha * 0.42f, waveColor);
-			drawTravelingWaveSegments(batch, region, water, start, end, wave.visualThickness() * 2.4f, waveColor);
+			drawTravelingWaveSegments(batch, region, water, wave, start, end, wave.visualThickness() * 2.4f,
+					waveColor);
 			setWaveColor(waterColor, true, alpha, waveColor);
-			drawTravelingWaveSegments(batch, region, water, start, end, wave.visualThickness(), waveColor);
+			drawTravelingWaveSegments(batch, region, water, wave, start, end, wave.visualThickness(), waveColor);
 		}
 		else{
 			setWaveColor(waterColor, false, alpha * 0.9f, waveColor);
-			drawTravelingWaveSegments(batch, region, water, start, end, wave.visualThickness() * 1.8f, waveColor);
+			drawTravelingWaveSegments(batch, region, water, wave, start, end, wave.visualThickness() * 1.8f,
+					waveColor);
 		}
 	}
 
-	private void drawTravelingWaveSegments(SpriteBatch batch, TextureRegion region, Eau water, float start, float end,
-			float thickness, Color color){
+	private void drawTravelingWaveSegments(SpriteBatch batch, TextureRegion region, Eau water, TravelingWave wave,
+			float start, float end, float thickness, Color color){
 		float length = end - start;
 		if(length <= 0.01f || thickness <= 0f || color.a <= 0f)
 			return;
-		batch.setColor(color);
-		int subSegmentCount = MathUtils.clamp(MathUtils.ceil(length / SURFACE_SAMPLE_SPACING), 1, 64);
+		int subSegmentCount = MathUtils.clamp(MathUtils.ceil(length / VISUAL_WAVE_SEGMENT_SPACING), 1, 96);
 		float step = length / subSegmentCount;
 		for(int i = 0; i < subSegmentCount; i++){
 			float segmentStart = start + step * i;
 			float segmentEnd = i == subSegmentCount - 1 ? end : segmentStart + step;
+			float envelope = wave.visualEnvelopeAt((segmentStart + segmentEnd) * 0.5f);
+			float alpha = color.a * smoothStep(envelope);
+			if(alpha <= 0.002f)
+				continue;
+			float localThickness = thickness * (0.35f + envelope * 0.65f);
+			batch.setColor(color.r, color.g, color.b, alpha);
 			surfacePoint(water, segmentStart, rippleStartPoint);
 			surfacePoint(water, segmentEnd, rippleEndPoint);
 			float subLength = rippleStartPoint.dst(rippleEndPoint);
@@ -431,11 +434,11 @@ public class WaterSplashSystem {
 					rippleEndPoint.x - rippleStartPoint.x) * MathUtils.radiansToDegrees;
 			batch.draw(region,
 					drawPoint.x - subLength * 0.5f,
-					drawPoint.y - thickness * 0.5f,
+					drawPoint.y - localThickness * 0.5f,
 					subLength * 0.5f,
-					thickness * 0.5f,
+					localThickness * 0.5f,
 					subLength,
-					thickness,
+					localThickness,
 					1,
 					1,
 					angle);
@@ -996,14 +999,6 @@ public class WaterSplashSystem {
 
 		boolean update(float delta, float halfWidth){
 			age += delta;
-			if(merging){
-				mergeAge += delta;
-				float progress = smoothStep(MathUtils.clamp(mergeAge / TRAVELING_WAVE_MERGE_DURATION, 0f, 1f));
-				amplitude = mergeStartAmplitude * (1f - progress);
-				speed *= (float)Math.pow(TRAVELING_WAVE_BOUNCE_SPEED_DAMPING, delta);
-				return false;
-			}
-
 			centerX += direction * speed * delta;
 			for(int i = 0; i < 8 && (centerX < -halfWidth || centerX > halfWidth); i++){
 				if(centerX < -halfWidth){
@@ -1020,6 +1015,12 @@ public class WaterSplashSystem {
 				bounceCount++;
 			}
 			centerX = MathUtils.clamp(centerX, -halfWidth, halfWidth);
+			if(merging){
+				mergeAge += delta;
+				float progress = smoothStep(MathUtils.clamp(mergeAge / TRAVELING_WAVE_MERGE_DURATION, 0f, 1f));
+				amplitude = mergeStartAmplitude * (1f - progress);
+				return false;
+			}
 			amplitude *= (float)Math.pow(TRAVELING_WAVE_DAMPING_PER_SECOND, delta);
 			if(amplitude <= TRAVELING_WAVE_MERGE_AMPLITUDE || age >= TRAVELING_WAVE_MAX_AGE)
 				return startMerging();
@@ -1051,6 +1052,15 @@ public class WaterSplashSystem {
 
 		float visualLength(){
 			return width * 2.45f;
+		}
+
+		float visualEnvelopeAt(float localX){
+			float visualRadius = Math.max(width, visualLength() * 0.5f);
+			float normalizedDistance = Math.abs(localX - centerX) / visualRadius;
+			if(normalizedDistance >= 1f)
+				return 0f;
+			float envelope = MathUtils.cos(normalizedDistance * MathUtils.PI * 0.5f);
+			return envelope * envelope;
 		}
 
 		float visualAlpha(){

@@ -54,7 +54,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.one.button.jam.Couleurs;
 import com.one.button.jam.MyGdxGame;
 
-public class LevelEditorScreen extends InputAdapter implements Screen, EditorBrowserBridge.PanHandler {
+public class LevelEditorScreen extends InputAdapter implements Screen {
 	private static final float LEFT_PANEL_WIDTH = 300f;
 	private static final float RIGHT_PANEL_WIDTH = 230f;
 	private static final float MIN_ZOOM = 0.12f;
@@ -145,6 +145,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 	private int resizeHorizontal;
 	private int resizeVertical;
 	private int draggedPointIndex = -1;
+	private int activeDragPointer = -1;
+	private int activeDragButton = -1;
 	private int panDragLastScreenX;
 	private int panDragLastScreenY;
 	private boolean dragUndoRecorded;
@@ -173,9 +175,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 
 		@Override
 		public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-			if(button != Buttons.RIGHT || !isWorldScreen(screenX, screenY))
-				return false;
-			return beginPanDrag(screenX, screenY, button);
+			return false;
 		}
 
 		@Override
@@ -216,7 +216,6 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 
 	@Override
 	public void show() {
-		EditorBrowserBridge.setEditorPanHandler(this);
 		EditorBrowserBridge.setEditorShortcutsActive(true);
 		Gdx.graphics.setContinuousRendering(true);
 		Gdx.input.setInputProcessor(new InputMultiplexer(worldMouseInput, stage, this));
@@ -325,9 +324,10 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 		dragMode = DragMode.NONE;
 		draggedPointIndex = -1;
 		dragUndoRecorded = false;
-		if(button == Buttons.RIGHT){
-			return beginPanDrag(screenX, screenY, button);
-		}
+		activeDragPointer = -1;
+		activeDragButton = -1;
+		if(button != Buttons.LEFT)
+			return false;
 		if(activePaletteType != null){
 			EditorObjectType placementType = activePaletteType;
 			placeObject(placementType, world.x, world.y);
@@ -340,10 +340,12 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 			if(pointIndex >= 0){
 				dragMode = DragMode.DRAG_POINT;
 				draggedPointIndex = pointIndex;
+				beginActiveDrag(pointer, button);
 				return true;
 			}
 			if(hitResizeHandle(selectedObject, world.x, world.y)){
 				dragMode = DragMode.RESIZE_RECT;
+				beginActiveDrag(pointer, button);
 				return true;
 			}
 		}
@@ -353,6 +355,10 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 			dragMode = DragMode.MOVE;
 			dragOffsetX = world.x - selectedObject.x;
 			dragOffsetY = world.y - selectedObject.y;
+			beginActiveDrag(pointer, button);
+		}
+		else{
+			beginPanDrag(screenX, screenY, pointer, button);
 		}
 		if(previousSelection != selectedObject)
 			buildLeftPanel();
@@ -368,7 +374,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 			panByMouseDrag(screenX, screenY);
 			return true;
 		}
-		if(dragMode == DragMode.NONE || selectedObject == null)
+		if(dragMode == DragMode.NONE || selectedObject == null || !isActiveDragPointer(pointer))
 			return false;
 		Vector2 world = screenToWorld(screenX, screenY, scratch);
 		if(dragMode == DragMode.MOVE){
@@ -397,10 +403,17 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 			return true;
 		}
 		if(dragMode != DragMode.NONE){
-			boolean editedObject = dragMode != DragMode.PAN;
+			if(!isActiveDragRelease(pointer, button))
+				return false;
+			DragMode completedDragMode = dragMode;
+			boolean editedObject = completedDragMode != DragMode.PAN;
+			boolean objectChanged = dragUndoRecorded;
 			clearDragState();
-			if(editedObject)
+			if(editedObject){
 				buildLeftPanel();
+				if(objectChanged)
+					DebugConfig.log("level editor object edited mode=" + completedDragMode);
+			}
 			updateHover(screenX, screenY);
 			logCamera();
 			return true;
@@ -421,44 +434,37 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 		cancelDrag();
 	}
 
-	@Override
-	public void onBrowserPanStart(int screenX, int screenY) {
-		if(!isWorldScreen(screenX, screenY))
-			return;
-		beginPanDrag(screenX, screenY, Buttons.RIGHT);
-	}
-
-	@Override
-	public void onBrowserPanMove(int screenX, int screenY) {
-		if(dragMode != DragMode.PAN)
-			return;
-		panByMouseDrag(screenX, screenY);
-	}
-
-	@Override
-	public void onBrowserPanEnd(int screenX, int screenY) {
-		if(dragMode != DragMode.PAN)
-			return;
-		endPanDrag(screenX, screenY);
-	}
-
-	private boolean beginPanDrag(int screenX, int screenY, int button){
-		if(button != Buttons.RIGHT)
+	private boolean beginPanDrag(int screenX, int screenY, int pointer, int button){
+		if(button != Buttons.LEFT)
 			return false;
 		dragMode = DragMode.PAN;
 		draggedPointIndex = -1;
 		dragUndoRecorded = false;
+		beginActiveDrag(pointer, button);
 		panDragLastScreenX = screenX;
 		panDragLastScreenY = screenY;
 		return true;
 	}
 
+	private void beginActiveDrag(int pointer, int button){
+		activeDragPointer = pointer;
+		activeDragButton = button;
+	}
+
 	private boolean isActivePanPointer(int pointer){
-		return dragMode == DragMode.PAN;
+		return dragMode == DragMode.PAN && isActiveDragPointer(pointer);
 	}
 
 	private boolean isActivePanRelease(int pointer, int button){
-		return dragMode == DragMode.PAN;
+		return dragMode == DragMode.PAN && isActiveDragRelease(pointer, button);
+	}
+
+	private boolean isActiveDragPointer(int pointer){
+		return activeDragPointer == pointer;
+	}
+
+	private boolean isActiveDragRelease(int pointer, int button){
+		return activeDragPointer == pointer && activeDragButton == button;
 	}
 
 	private void endPanDrag(int screenX, int screenY){
@@ -470,6 +476,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 	private void clearDragState(){
 		dragMode = DragMode.NONE;
 		draggedPointIndex = -1;
+		activeDragPointer = -1;
+		activeDragButton = -1;
 		resizeHorizontal = 0;
 		resizeVertical = 0;
 		dragUndoRecorded = false;
@@ -488,14 +496,12 @@ public class LevelEditorScreen extends InputAdapter implements Screen, EditorBro
 	public void hide() {
 		cancelDrag();
 		EditorBrowserBridge.setEditorShortcutsActive(false);
-		EditorBrowserBridge.setEditorPanHandler(null);
 	}
 
 	@Override
 	public void dispose() {
 		cancelDrag();
 		EditorBrowserBridge.setEditorShortcutsActive(false);
-		EditorBrowserBridge.setEditorPanHandler(null);
 		stage.dispose();
 		shapes.dispose();
 		if(editorFont != null)
