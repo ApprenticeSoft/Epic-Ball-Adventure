@@ -22,13 +22,18 @@ final class WaterSurfaceRenderer {
 
 	void draw(PolygonSpriteBatch batch, TextureAtlas textureAtlas, Eau water,
 			WaterSplashSystem.WaterSurfaceSimulation simulation){
+		draw(batch, textureAtlas, water, simulation, false);
+	}
+
+	void draw(PolygonSpriteBatch batch, TextureAtlas textureAtlas, Eau water,
+			WaterSplashSystem.WaterSurfaceSimulation simulation, boolean localShaderCoordinates){
 		TextureRegion region = textureAtlas.findRegion("WhiteSquare");
 		if(region == null)
 			return;
 		int coordCount = buildLocalPolygonVertices(water.width, water.height, simulation, ensurePolygonCapacity(water,
 				simulation));
 		ShortArray triangles = triangulator.computeTriangles(polygonVertices, 0, coordCount);
-		int renderCount = buildRenderVertices(water, region, coordCount);
+		int renderCount = buildRenderVertices(water, region, coordCount, localShaderCoordinates);
 		batch.draw(region.getTexture(), renderVertices, 0, renderCount, triangles.items, 0, triangles.size);
 		batch.setColor(1f, 1f, 1f, 1f);
 	}
@@ -45,7 +50,7 @@ final class WaterSurfaceRenderer {
 		return polygonVertices;
 	}
 
-	private int buildRenderVertices(Eau water, TextureRegion region, int coordCount){
+	private int buildRenderVertices(Eau water, TextureRegion region, int coordCount, boolean localShaderCoordinates){
 		Color color = water.getCouleur();
 		float packedColor = color == null ? Color.WHITE_FLOAT_BITS : color.toFloatBits();
 		float halfWidth = water.width;
@@ -65,8 +70,16 @@ final class WaterSurfaceRenderer {
 			renderVertices[vertexIndex++] = transformedPoint.x;
 			renderVertices[vertexIndex++] = transformedPoint.y;
 			renderVertices[vertexIndex++] = packedColor;
-			renderVertices[vertexIndex++] = MathUtils.lerp(u, u2, (localX + halfWidth) / safeWidth);
-			renderVertices[vertexIndex++] = MathUtils.lerp(v2, v, (localY - minY) / safeHeight);
+			float normalizedX = MathUtils.clamp((localX + halfWidth) / safeWidth, 0f, 1f);
+			float normalizedY = MathUtils.clamp((localY - minY) / safeHeight, 0f, 1f);
+			if(localShaderCoordinates){
+				renderVertices[vertexIndex++] = normalizedX;
+				renderVertices[vertexIndex++] = normalizedY;
+			}
+			else{
+				renderVertices[vertexIndex++] = MathUtils.lerp(u, u2, normalizedX);
+				renderVertices[vertexIndex++] = MathUtils.lerp(v2, v, normalizedY);
+			}
 		}
 		return vertexIndex;
 	}

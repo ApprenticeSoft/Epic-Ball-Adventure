@@ -6,7 +6,7 @@ test('web entrypoint uses the current bundle cache token', async ({ page }) => {
 
   const scriptSource = await page.locator('script[src*="html.nocache.js"]').getAttribute('src');
 
-  expect(scriptSource).toContain('20260519-no-dark-wave-sprite');
+  expect(scriptSource).toContain('20260519-water-refraction-splash');
 });
 
 test('auto-advances through every level without a black screen', async ({ page }, testInfo) => {

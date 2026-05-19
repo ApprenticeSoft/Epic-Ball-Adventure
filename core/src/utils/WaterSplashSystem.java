@@ -15,7 +15,7 @@ import com.badlogic.gdx.physics.box2d.World;
 import com.badlogic.gdx.utils.Array;
 
 public class WaterSplashSystem {
-	private static final int MAX_PARTICLES = 180;
+	private static final int MAX_PARTICLES = 320;
 	private static final float VISUAL_GRAVITY = 34f;
 	private static final float MIN_SPLASH_SPEED = 1.2f;
 	private static final float MIN_SPLASH_TOTAL_SPEED = 2.4f;
@@ -23,7 +23,7 @@ public class WaterSplashSystem {
 	private static final float MAX_AIRBORNE_AGE = 12f;
 	private static final float AIRBORNE_SAFETY_MARGIN = 18f;
 	private static final float RIPPLE_BOUNCE_ALPHA = 0.45f;
-	private static final float SURFACE_SAMPLE_SPACING = 0.18f;
+	private static final float SURFACE_SAMPLE_SPACING = 0.085f;
 	private static final float WATER_SURFACE_COLLISION_SAMPLE_SPACING = 0.06f;
 	private static final float SURFACE_STIFFNESS = 15f;
 	private static final float SURFACE_DAMPING = 0.58f;
@@ -52,6 +52,10 @@ public class WaterSplashSystem {
 	private static final float VISUAL_WAVE_MIN_THICKNESS = 0.075f;
 	private static final float VISUAL_WAVE_MAX_THICKNESS = 0.24f;
 	private static final float VISUAL_WAVE_SEGMENT_SPACING = SURFACE_SAMPLE_SPACING * 0.45f;
+	private static final int MIN_DROPLETS_PER_IMPACT = 8;
+	private static final int MAX_DROPLETS_PER_IMPACT = 96;
+	private static final float MAX_DROPLET_SPREAD = 28f;
+	private static final int MAX_SURFACE_SAMPLES = 192;
 
 	private final World world;
 	private final Array<Eau> waters;
@@ -195,9 +199,13 @@ public class WaterSplashSystem {
 		float waterAlpha = waterAlpha(water);
 		applySurfaceImpact(impact, water, waterAlpha);
 
-		int dropletCount = MathUtils.clamp(Math.round(4f + impact.intensity * 1.25f + impact.size * 1.4f), 5, 34);
-		float radiusBase = MathUtils.clamp(0.035f + impact.intensity * 0.011f + impact.size * 0.012f, 0.04f, 0.24f);
-		float spread = MathUtils.clamp(impact.intensity * 0.6f + impact.size * 0.25f, 0.7f, 10f);
+		int dropletCount = calculateDropletCount(impact.downwardSpeed, impact.totalSpeed, impact.mass, impact.size,
+				impact.intensity);
+		float radiusBase = calculateDropletRadiusBase(impact.mass, impact.size, impact.intensity);
+		float spread = calculateDropletSpread(impact.downwardSpeed, impact.totalSpeed, impact.mass, impact.size,
+				impact.intensity);
+		float launchSpeed = calculateDropletLaunchSpeed(impact.downwardSpeed, impact.mass, impact.size,
+				impact.intensity);
 		Vector2 normal = new Vector2(impact.surfaceNormal).nor();
 		Vector2 tangent = new Vector2(normal.y, -normal.x);
 		if(tangent.isZero())
@@ -205,12 +213,12 @@ public class WaterSplashSystem {
 		tangent.nor();
 
 		for(int i = 0; i < dropletCount; i++){
-			float side = MathUtils.random(-spread, spread) + impact.velocity.dot(tangent) * 0.12f;
-			float up = MathUtils.random(2.4f + impact.intensity * 0.24f, 5.2f + impact.intensity * 0.72f);
+			float side = MathUtils.random(-spread, spread) + impact.velocity.dot(tangent) * 0.22f;
+			float up = MathUtils.random(launchSpeed * 0.72f, launchSpeed * 1.34f);
 			Vector2 velocity = new Vector2(tangent).scl(side).mulAdd(normal, up);
 			Vector2 position = new Vector2(impact.point)
-					.mulAdd(normal, 0.08f)
-					.mulAdd(tangent, MathUtils.random(-impact.size * 0.18f, impact.size * 0.18f));
+					.mulAdd(normal, 0.08f + radiusBase * 0.4f)
+					.mulAdd(tangent, MathUtils.random(-impact.size * 0.32f, impact.size * 0.32f));
 			float radius = radiusBase * MathUtils.random(0.65f, 1.35f);
 			float alpha = randomDropAlpha(waterAlpha, MathUtils.random(0.5f, 1f));
 			particles.add(SplashParticle.droplet(position, velocity, radius, MAX_AIRBORNE_AGE, alpha));
@@ -560,6 +568,43 @@ public class WaterSplashSystem {
 				+ safeSize * 0.62f + safeIntensity * 0.2f), MIN_VISIBLE_WAVES, MAX_VISIBLE_WAVES);
 	}
 
+	static int calculateDropletCount(float downwardSpeed, float totalSpeed, float mass, float size, float intensity){
+		float speed = Math.max(0f, downwardSpeed);
+		float travelSpeed = Math.max(speed, Math.max(0f, totalSpeed));
+		float safeMass = Math.max(0.02f, mass);
+		float safeSize = Math.max(0.1f, size);
+		float safeIntensity = Math.max(0f, intensity);
+		return MathUtils.clamp(MathUtils.round(7f + safeIntensity * 3.05f + travelSpeed * 0.74f
+				+ (float)Math.sqrt(safeMass) * 4.2f + safeSize * 2.25f), MIN_DROPLETS_PER_IMPACT,
+				MAX_DROPLETS_PER_IMPACT);
+	}
+
+	static float calculateDropletSpread(float downwardSpeed, float totalSpeed, float mass, float size, float intensity){
+		float travelSpeed = Math.max(Math.max(0f, downwardSpeed), Math.max(0f, totalSpeed));
+		float safeMass = Math.max(0.02f, mass);
+		float safeSize = Math.max(0.1f, size);
+		float safeIntensity = Math.max(0f, intensity);
+		return MathUtils.clamp(0.9f + safeIntensity * 0.84f + travelSpeed * 0.28f
+				+ (float)Math.sqrt(safeMass) * 0.95f + safeSize * 0.48f, 1.1f, MAX_DROPLET_SPREAD);
+	}
+
+	static float calculateDropletLaunchSpeed(float downwardSpeed, float mass, float size, float intensity){
+		float speed = Math.max(0f, downwardSpeed);
+		float safeMass = Math.max(0.02f, mass);
+		float safeSize = Math.max(0.1f, size);
+		float safeIntensity = Math.max(0f, intensity);
+		return MathUtils.clamp(3.2f + safeIntensity * 0.54f + speed * 0.22f
+				+ (float)Math.sqrt(safeMass) * 0.5f + safeSize * 0.2f, 3.2f, 24f);
+	}
+
+	static float calculateDropletRadiusBase(float mass, float size, float intensity){
+		float safeMass = Math.max(0.02f, mass);
+		float safeSize = Math.max(0.1f, size);
+		float safeIntensity = Math.max(0f, intensity);
+		return MathUtils.clamp(0.035f + safeIntensity * 0.015f + safeSize * 0.018f
+				+ (float)Math.sqrt(safeMass) * 0.006f, 0.04f, 0.36f);
+	}
+
 	static float calculateWaveRenderAlpha(TravelingWave wave, float waterAlpha){
 		if(wave == null)
 			return 0f;
@@ -878,7 +923,7 @@ public class WaterSplashSystem {
 			float startX = MathUtils.clamp(localX, -halfWidth, halfWidth);
 			float spacing = MathUtils.clamp(0.3f + size * 0.15f + amplitude * 0.14f, sampleSpacing * 1.9f,
 					Math.max(sampleSpacing * 2.4f, halfWidth * 0.35f));
-			float width = MathUtils.clamp(spacing * 0.58f, sampleSpacing * 1.15f, halfWidth * 0.18f);
+			float width = MathUtils.clamp(spacing * 0.82f, sampleSpacing * 1.55f, halfWidth * 0.24f);
 			for(int i = 0; i < waveCount; i++){
 				int direction = i % 2 == 0 ? 1 : -1;
 				int rank = i / 2;
@@ -1031,10 +1076,7 @@ public class WaterSplashSystem {
 		float displacementAt(float localX){
 			float distance = localX - centerX;
 			float normalizedDistance = Math.abs(distance) / width;
-			if(normalizedDistance >= 1f)
-				return 0f;
-			float envelope = MathUtils.cos(normalizedDistance * MathUtils.PI * 0.5f);
-			envelope *= envelope;
+			float envelope = roundedWaveEnvelope(normalizedDistance);
 			return amplitude * polarity * envelope;
 		}
 
@@ -1049,10 +1091,7 @@ public class WaterSplashSystem {
 		float visualEnvelopeAt(float localX){
 			float visualRadius = Math.max(width, visualLength() * 0.5f);
 			float normalizedDistance = Math.abs(localX - centerX) / visualRadius;
-			if(normalizedDistance >= 1f)
-				return 0f;
-			float envelope = MathUtils.cos(normalizedDistance * MathUtils.PI * 0.5f);
-			return envelope * envelope;
+			return roundedWaveEnvelope(normalizedDistance);
 		}
 
 		boolean drawsSpriteOverlay(){
@@ -1083,8 +1122,17 @@ public class WaterSplashSystem {
 		return t * t * (3f - 2f * t);
 	}
 
+	static float roundedWaveEnvelope(float normalizedDistance){
+		float t = MathUtils.clamp(normalizedDistance, 0f, 1f);
+		if(t >= 1f)
+			return 0f;
+		float cosine = Math.max(0f, MathUtils.cos(t * MathUtils.PI * 0.5f));
+		float shoulder = 1f - smoothStep(t);
+		return MathUtils.clamp(cosine * 0.72f + shoulder * 0.28f, 0f, 1f);
+	}
+
 	static int calculateSurfaceSampleCount(float halfWidth){
 		return MathUtils.clamp(MathUtils.ceil((Math.max(0.1f, halfWidth) * 2f) / SURFACE_SAMPLE_SPACING) + 1,
-				12, 96);
+				12, MAX_SURFACE_SAMPLES);
 	}
 }

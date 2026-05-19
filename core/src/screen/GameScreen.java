@@ -8,6 +8,7 @@ import utils.MyCamera;
 import utils.OrthogonalTiledMapRendererWithSprites;
 import utils.PlatformInfo;
 import utils.Variables;
+import utils.WaterRefractionRenderer;
 import utils.WaterSplashSystem;
 import bodies.Eau;
 import bodies.Obstacle;
@@ -76,6 +77,7 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	private PolygonSpriteBatch polyBatch;
 	private WaterSplashSystem waterSplashSystem;
+	private WaterRefractionRenderer waterRefractionRenderer;
 
 	/***************Sounds****************/
 	private Sound soundWin, soundFall, soundWater, soundChock, soundSpring;
@@ -217,6 +219,7 @@ public class GameScreen extends InputAdapter implements Screen{
 	else
 		DebugConfig.log("shader compile failed level=" + Variables.niveauSelectione + " log=" + shaderProgram.getLog());
 
+	waterRefractionRenderer = new WaterRefractionRenderer();
 	resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 	DebugConfig.log("GameScreen construct end level=" + Variables.niveauSelectione);
 	}
@@ -237,6 +240,8 @@ public class GameScreen extends InputAdapter implements Screen{
 			physicsAccumulator = 0;
 		if(waterSplashSystem != null && !Variables.levelComplete)
 			waterSplashSystem.update(frameDelta);
+		if(waterRefractionRenderer != null && !Variables.levelComplete)
+			waterRefractionRenderer.update(frameDelta);
 
         camera.mouvement(lecteurCarte.balle, tiledMap, frameDelta);
         camera.update();
@@ -245,7 +250,7 @@ public class GameScreen extends InputAdapter implements Screen{
 		if(Variables.levelComplete)
 			levelComplete(frameDelta);
 		else
-			drawGameplay();
+			drawGameplay(true);
 
 		//Level lost
         if(!Variables.levelComplete && lecteurCarte.balle.getY() < -5){
@@ -411,6 +416,8 @@ public class GameScreen extends InputAdapter implements Screen{
 			layoutRestartLabels();
         }
         resizeFrameBuffer(Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+        if(waterRefractionRenderer != null)
+			waterRefractionRenderer.resize(Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         if(transitionInitialized){
 			transitionStartRadius = getBackBufferDiagonal();
 			updateVignetteState();
@@ -455,6 +462,8 @@ public class GameScreen extends InputAdapter implements Screen{
 			stage.dispose();
 		if(polyBatch != null)
 			polyBatch.dispose();
+		if(waterRefractionRenderer != null)
+			waterRefractionRenderer.dispose();
 		if(shaderProgram != null)
 			shaderProgram.dispose();
 		if(fbo != null)
@@ -476,7 +485,13 @@ public class GameScreen extends InputAdapter implements Screen{
 	}
 
 	private void drawGameplay(){
+		drawGameplay(true);
+	}
+
+	private void drawGameplay(boolean allowWaterRefraction){
         tiledMapRenderer.setView(camera);
+		boolean refractionReady = allowWaterRefraction && captureWaterRefractionScene();
+
         game.batch.setProjectionMatrix(camera.combined);
         game.batch.begin();
 		lecteurCarte.drawBehindWater(game.batch, textureAtlas);
@@ -486,8 +501,18 @@ public class GameScreen extends InputAdapter implements Screen{
 			polyBatch.setProjectionMatrix(camera.combined);
 			polyBatch.begin();
 			lecteurCarte.drawPolygoneBehindWater(polyBatch, camera);
-			lecteurCarte.drawWater(polyBatch, textureAtlas, waterSplashSystem);
 			polyBatch.end();
+
+			polyBatch.setProjectionMatrix(camera.combined);
+			if(refractionReady && waterRefractionRenderer.beginWaterPass(polyBatch)){
+				lecteurCarte.drawWater(polyBatch, textureAtlas, waterSplashSystem, true);
+				waterRefractionRenderer.endWaterPass(polyBatch);
+			}
+			else{
+				polyBatch.begin();
+				lecteurCarte.drawWater(polyBatch, textureAtlas, waterSplashSystem);
+				polyBatch.end();
+			}
 		}
 
 		if(waterSplashSystem != null){
@@ -518,6 +543,26 @@ public class GameScreen extends InputAdapter implements Screen{
 			lecteurCarte.drawPolygone(polyBatch, camera);
 			polyBatch.end();
 		}
+	}
+
+	private boolean captureWaterRefractionScene(){
+		if(waterRefractionRenderer == null || lecteurCarte == null || lecteurCarte.waters.size == 0)
+			return false;
+		if(!waterRefractionRenderer.beginCapture(couleurs.getCouleurFond()))
+			return false;
+
+		game.batch.setProjectionMatrix(camera.combined);
+		game.batch.begin();
+		lecteurCarte.drawBehindWater(game.batch, textureAtlas);
+		game.batch.end();
+
+		polyBatch.setProjectionMatrix(camera.combined);
+		polyBatch.begin();
+		lecteurCarte.drawPolygoneBehindWater(polyBatch, camera);
+		polyBatch.end();
+
+		waterRefractionRenderer.endCapture();
+		return true;
 	}
 
 	private void updateGameplayCameraViewport(int screenWidth, int screenHeight){
@@ -677,14 +722,14 @@ public class GameScreen extends InputAdapter implements Screen{
 						+ " shader=" + (shaderProgram != null)
 						+ " shaderCompiled=" + (shaderProgram != null && shaderProgram.isCompiled()));
 			}
-			drawGameplay();
+			drawGameplay(false);
 			return;
 		}
 
 		fbo.begin();
 		Gdx.graphics.getGL20().glClearColor(couleurs.getCouleurFond().r,couleurs.getCouleurFond().g,couleurs.getCouleurFond().b,1);
 		Gdx.graphics.getGL20().glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
-		drawGameplay();
+		drawGameplay(false);
 		fbo.end();
 
 		game.batch.setProjectionMatrix(camera.combined);

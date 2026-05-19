@@ -221,10 +221,15 @@ public class LecteurCarte {
 	}
 
 	public void drawWater(PolygonSpriteBatch batch, TextureAtlas textureAtlas, WaterSplashSystem waterSplashSystem){
+		drawWater(batch, textureAtlas, waterSplashSystem, false);
+	}
+
+	public void drawWater(PolygonSpriteBatch batch, TextureAtlas textureAtlas, WaterSplashSystem waterSplashSystem,
+			boolean localShaderCoordinates){
         for(Eau water : waters){
 	WaterSplashSystem.WaterSurfaceSimulation simulation = waterSplashSystem == null ? null
 			: waterSplashSystem.findSurfaceSimulation(water);
-	waterSurfaceRenderer.draw(batch, textureAtlas, water, simulation);
+	waterSurfaceRenderer.draw(batch, textureAtlas, water, simulation, localShaderCoordinates);
         }
 	}
 

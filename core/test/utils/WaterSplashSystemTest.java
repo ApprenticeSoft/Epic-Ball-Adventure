@@ -146,6 +146,21 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void cinematicSplashScalesWithImpactEnergy(){
+		int lightCount = WaterSplashSystem.calculateDropletCount(2f, 2f, 0.05f, 0.6f, 1f);
+		int heavyCount = WaterSplashSystem.calculateDropletCount(24f, 28f, 18f, 4f, 18f);
+
+		assertTrue(heavyCount > lightCount * 3);
+		assertEquals(96, heavyCount);
+		assertTrue(WaterSplashSystem.calculateDropletSpread(24f, 28f, 18f, 4f, 18f)
+				> WaterSplashSystem.calculateDropletSpread(2f, 2f, 0.05f, 0.6f, 1f) * 4f);
+		assertTrue(WaterSplashSystem.calculateDropletLaunchSpeed(24f, 18f, 4f, 18f)
+				> WaterSplashSystem.calculateDropletLaunchSpeed(2f, 0.05f, 0.6f, 1f) * 2f);
+		assertTrue(WaterSplashSystem.calculateDropletRadiusBase(18f, 4f, 18f)
+				> WaterSplashSystem.calculateDropletRadiusBase(0.05f, 0.6f, 1f));
+	}
+
+	@Test
 	public void visibleWaveAlphaIsReadableAndCappedByWaterAlpha(){
 		WaterSplashSystem.TravelingWave wave =
 				new WaterSplashSystem.TravelingWave(0f, 1, 0.35f, 0.5f, 2f, 0.4f, 0f);
@@ -224,6 +239,14 @@ public class WaterSplashSystemTest {
 		assertEquals(1f, wave.visualEnvelopeAt(0f), 0.0001f);
 		assertTrue(wave.visualEnvelopeAt(0.35f) > wave.visualEnvelopeAt(0.48f));
 		assertEquals(0f, wave.visualEnvelopeAt(wave.visualLength()), 0.0001f);
+	}
+
+	@Test
+	public void roundedWaveEnvelopeKeepsBroadShoulders(){
+		assertEquals(1f, WaterSplashSystem.roundedWaveEnvelope(0f), 0.0001f);
+		assertTrue(WaterSplashSystem.roundedWaveEnvelope(0.5f) > 0.6f);
+		assertTrue(WaterSplashSystem.roundedWaveEnvelope(0.8f) > 0.2f);
+		assertEquals(0f, WaterSplashSystem.roundedWaveEnvelope(1f), 0.0001f);
 	}
 
 	@Test
