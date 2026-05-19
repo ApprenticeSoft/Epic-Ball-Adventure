@@ -44,6 +44,7 @@ public class LecteurCarte {
 	World world;
 	public float eauPosX, eauPosY, cameraOrigineX, cameraOrigineY;
 	private Couleurs couleurs;
+	private final WaterSurfaceRenderer waterSurfaceRenderer = new WaterSurfaceRenderer();
 
 	public LecteurCarte(final MyGdxGame game, TiledMap tiledMap, World world, OrthographicCamera camera2, Couleurs couleurs){
 		this.camera = camera2;
@@ -188,7 +189,6 @@ public class LecteurCarte {
 		drawBalle(batch, textureAtlas);
 		drawSpring(batch, textureAtlas);
 		drawObstacle(batch, textureAtlas);
-		drawWater(batch, textureAtlas);
 	}
 
 	public void drawBalle(SpriteBatch batch, TextureAtlas textureAtlas){
@@ -213,9 +213,19 @@ public class LecteurCarte {
         }
 	}
 
+	public void drawWater(PolygonSpriteBatch batch, TextureAtlas textureAtlas, WaterSplashSystem waterSplashSystem){
+        for(Eau water : waters){
+	WaterSplashSystem.WaterSurfaceSimulation simulation = waterSplashSystem == null ? null
+			: waterSplashSystem.findSurfaceSimulation(water);
+	waterSurfaceRenderer.draw(batch, textureAtlas, water, simulation);
+        }
+	}
+
 	public void drawObstacle(SpriteBatch batch, TextureAtlas textureAtlas){
-		 for(Obstacle obstacle : obstaclesOrganises)
-			 obstacle.draw(batch, textureAtlas);
+		 for(Obstacle obstacle : obstaclesOrganises){
+			 if(!(obstacle instanceof Eau))
+				 obstacle.draw(batch, textureAtlas);
+		 }
 	}
 
 	public void drawRippleOccluders(SpriteBatch batch, TextureAtlas textureAtlas){

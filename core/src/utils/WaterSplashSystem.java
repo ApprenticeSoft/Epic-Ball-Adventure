@@ -24,9 +24,11 @@ public class WaterSplashSystem {
 	private static final float AIRBORNE_SAFETY_MARGIN = 18f;
 	private static final float RIPPLE_BOUNCE_ALPHA = 0.45f;
 	private static final float SURFACE_SAMPLE_SPACING = 0.18f;
-	private static final float SURFACE_STIFFNESS = 18f;
-	private static final float SURFACE_DAMPING = 2.1f;
-	private static final float SURFACE_SPREAD = 18f;
+	private static final float SURFACE_STIFFNESS = 15f;
+	private static final float SURFACE_DAMPING = 0.82f;
+	private static final float SURFACE_SPREAD = 20f;
+	private static final float SURFACE_EDGE_REFLECTION_DAMPING = 0.72f;
+	private static final float SURFACE_SETTLE_THRESHOLD = 0.0035f;
 	private static final float SURFACE_MAX_DISPLACEMENT = 1.35f;
 	private static final float SURFACE_MAX_VELOCITY = 18f;
 
@@ -34,15 +36,10 @@ public class WaterSplashSystem {
 	private final Array<Eau> waters;
 	private final Array<SplashParticle> particles = new Array<SplashParticle>();
 	private final Array<WaterSurfaceSimulation> surfaceSimulations = new Array<WaterSurfaceSimulation>();
-	private final Color surfaceHighlightColor = new Color();
-	private final Color surfaceShadowColor = new Color();
 	private final Vector2 previousPosition = new Vector2();
 	private final Vector2 rayHitPoint = new Vector2();
 	private final Vector2 rayHitNormal = new Vector2();
 	private final Vector2 drawPoint = new Vector2();
-	private final Vector2 surfaceStartPoint = new Vector2();
-	private final Vector2 surfaceEndPoint = new Vector2();
-	private final Vector2 surfaceNormalOffset = new Vector2();
 	private final RippleSegment[] rippleSegments = new RippleSegment[]{
 			new RippleSegment(), new RippleSegment(), new RippleSegment()
 	};
@@ -103,12 +100,10 @@ public class WaterSplashSystem {
 	}
 
 	public void draw(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
-		if(particles.size == 0 && !hasActiveSurfaceSimulation())
+		if(particles.size == 0)
 			return;
 		TextureRegion dropRegion = textureAtlas.findRegion("BallColor");
 		TextureRegion flatRegion = textureAtlas.findRegion("WhiteSquare");
-		if(flatRegion != null)
-			drawWaterSurfaces(batch, flatRegion, waterColor);
 		for(SplashParticle particle : particles){
 			float alpha = cappedRenderAlpha(particle, waterColor);
 			if(alpha <= 0f)
@@ -125,7 +120,7 @@ public class WaterSplashSystem {
 	}
 
 	public void drawRipples(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
-		if(particles.size == 0 && !hasActiveSurfaceSimulation())
+		if(particles.size == 0)
 			return;
 		TextureRegion flatRegion = textureAtlas.findRegion("WhiteSquare");
 		if(flatRegion == null)
@@ -135,7 +130,6 @@ public class WaterSplashSystem {
 				continue;
 			drawRippleParticle(batch, flatRegion, particle, waterColor);
 		}
-		drawWaterSurfaces(batch, flatRegion, waterColor);
 		batch.setColor(1, 1, 1, 1);
 	}
 
@@ -331,62 +325,6 @@ public class WaterSplashSystem {
 				particle.water.getSurfaceAngleDegrees());
 	}
 
-	private void drawWaterSurfaces(SpriteBatch batch, TextureRegion region, Color waterColor){
-		for(WaterSurfaceSimulation simulation : surfaceSimulations){
-			if(!simulation.hasMotion())
-				continue;
-			drawWaterSurface(batch, region, simulation, waterColor);
-		}
-	}
-
-	private void drawWaterSurface(SpriteBatch batch, TextureRegion region, WaterSurfaceSimulation simulation,
-			Color waterColor){
-		float alpha = capToWaterAlpha(simulation.renderAlpha(), waterAlpha(waterColor));
-		if(alpha <= 0f)
-			return;
-
-		float thickness = simulation.renderThickness();
-		float shadowAlpha = capToWaterAlpha(alpha * 0.78f, waterAlpha(waterColor));
-		surfaceShadowColor.set(waterColor.r * 0.42f, waterColor.g * 0.42f, waterColor.b * 0.48f, shadowAlpha);
-		drawWaterSurfaceLine(batch, region, simulation, surfaceShadowColor, thickness * 1.65f, -thickness * 0.25f);
-
-		surfaceHighlightColor.set(
-				MathUtils.lerp(waterColor.r, 1f, 0.58f),
-				MathUtils.lerp(waterColor.g, 1f, 0.58f),
-				MathUtils.lerp(waterColor.b, 1f, 0.58f),
-				alpha);
-		drawWaterSurfaceLine(batch, region, simulation, surfaceHighlightColor, thickness, thickness * 0.12f);
-	}
-
-	private void drawWaterSurfaceLine(SpriteBatch batch, TextureRegion region, WaterSurfaceSimulation simulation,
-			Color color, float thickness, float normalOffset){
-		Vector2 normal = simulation.water.getSurfaceNormal();
-		surfaceNormalOffset.set(normal).scl(normalOffset);
-		batch.setColor(color);
-		for(int i = 0; i < simulation.sampleCount - 1; i++){
-			simulation.water.getSurfacePoint(simulation.localX(i), simulation.displacement(i), surfaceStartPoint);
-			simulation.water.getSurfacePoint(simulation.localX(i + 1), simulation.displacement(i + 1), surfaceEndPoint);
-			surfaceStartPoint.add(surfaceNormalOffset);
-			surfaceEndPoint.add(surfaceNormalOffset);
-			float length = surfaceStartPoint.dst(surfaceEndPoint);
-			if(length <= 0.01f)
-				continue;
-			drawPoint.set(surfaceStartPoint).add(surfaceEndPoint).scl(0.5f);
-			float angle = (float)Math.atan2(surfaceEndPoint.y - surfaceStartPoint.y,
-					surfaceEndPoint.x - surfaceStartPoint.x) * MathUtils.radiansToDegrees;
-			batch.draw(region,
-					drawPoint.x - length * 0.5f,
-					drawPoint.y - thickness * 0.5f,
-					length * 0.5f,
-					thickness * 0.5f,
-					length,
-					thickness,
-					1,
-					1,
-					angle);
-		}
-	}
-
 	private void drawFlatParticle(SpriteBatch batch, TextureRegion region, SplashParticle particle){
 		float length = particle.renderLength();
 		float thickness = particle.renderThickness();
@@ -428,11 +366,11 @@ public class WaterSplashSystem {
 		return simulation;
 	}
 
-	private boolean hasActiveSurfaceSimulation(){
+	WaterSurfaceSimulation findSurfaceSimulation(Eau water){
 		for(WaterSurfaceSimulation simulation : surfaceSimulations)
-			if(simulation.hasMotion())
-				return true;
-		return false;
+			if(simulation.water == water)
+				return simulation;
+		return null;
 	}
 
 	static int collectRippleSegments(float centerLocalX, float fullLength, float halfWidth, RippleSegment[] segments){
@@ -592,6 +530,8 @@ public class WaterSplashSystem {
 						displacements[i + 1] += rightDeltas[i];
 				}
 			}
+			velocities[0] *= SURFACE_EDGE_REFLECTION_DAMPING;
+			velocities[sampleCount - 1] *= SURFACE_EDGE_REFLECTION_DAMPING;
 			float maxEnergy = 0f;
 			for(int i = 0; i < sampleCount; i++){
 				displacements[i] = MathUtils.clamp(displacements[i], -SURFACE_MAX_DISPLACEMENT,
@@ -601,7 +541,7 @@ public class WaterSplashSystem {
 			}
 			energy = maxEnergy;
 			alpha *= 0.992f;
-			if(energy < 0.0025f){
+			if(energy < SURFACE_SETTLE_THRESHOLD){
 				for(int i = 0; i < sampleCount; i++){
 					displacements[i] = 0f;
 					velocities[i] = 0f;
@@ -612,15 +552,7 @@ public class WaterSplashSystem {
 		}
 
 		boolean hasMotion(){
-			return energy > 0.0025f || alpha > 0.01f;
-		}
-
-		float renderAlpha(){
-			return alpha * MathUtils.clamp(0.42f + energy * 1.55f, 0f, 1f);
-		}
-
-		float renderThickness(){
-			return MathUtils.clamp(0.06f + energy * 0.14f, 0.06f, 0.22f);
+			return energy > SURFACE_SETTLE_THRESHOLD || alpha > 0.01f;
 		}
 
 		float localX(int index){
@@ -629,6 +561,13 @@ public class WaterSplashSystem {
 
 		float displacement(int index){
 			return displacements[index];
+		}
+
+		float maxAbsDisplacement(){
+			float max = 0f;
+			for(int i = 0; i < sampleCount; i++)
+				max = Math.max(max, Math.abs(displacements[i]));
+			return max;
 		}
 
 		int nearestSample(float localX){

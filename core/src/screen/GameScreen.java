@@ -477,6 +477,13 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	private void drawGameplay(){
         tiledMapRenderer.setView(camera);
+		if(waterSplashSystem != null){
+			polyBatch.setProjectionMatrix(camera.combined);
+			polyBatch.begin();
+			lecteurCarte.drawWater(polyBatch, textureAtlas, waterSplashSystem);
+			polyBatch.end();
+		}
+
         game.batch.setProjectionMatrix(camera.combined);
         game.batch.begin();
 		lecteurCarte.draw(game.batch, textureAtlas/*, couleurs*/);

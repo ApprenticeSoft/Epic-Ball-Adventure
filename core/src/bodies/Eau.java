@@ -44,6 +44,10 @@ public class Eau extends Obstacle{
 	public void drawOmbre(SpriteBatch batch, TextureAtlas textureAtlas){
 	}
 
+	@Override
+	public void draw(SpriteBatch batch, TextureAtlas textureAtlas){
+	}
+
 	public BuoyancyController getBuoyancyController(){
 		return buoyancyController;
 	}

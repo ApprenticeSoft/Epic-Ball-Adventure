@@ -146,11 +146,10 @@ public class WaterSplashSystemTest {
 
 		assertTrue(simulation.hasMotion());
 		assertTrue(simulation.displacement(center) < 0f);
-		assertTrue(simulation.renderAlpha() > 0f);
 	}
 
 	@Test
-	public void surfaceSimulationImpactCreatesVisibleSurfaceLine(){
+	public void surfaceSimulationImpactCreatesVisibleMeshDisplacement(){
 		WaterSplashSystem.WaterSurfaceSimulation simulation =
 				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
 		int center = simulation.nearestSample(0f);
@@ -158,8 +157,6 @@ public class WaterSplashSystemTest {
 		simulation.applyImpact(0f, 0.8f, 1.6f, 0.5f);
 
 		assertTrue(Math.abs(simulation.displacement(center)) > 0.5f);
-		assertTrue(simulation.renderAlpha() >= 0.45f);
-		assertTrue(simulation.renderThickness() >= 0.15f);
 	}
 
 	@Test
@@ -191,6 +188,48 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void surfaceSimulationBouncesSeveralTimesBeforeSettling(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+		int center = simulation.nearestSample(0f);
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
+		float initialPeak = simulation.maxAbsDisplacement();
+		int lastSign = Math.round(Math.signum(simulation.displacement(center)));
+		int signChanges = 0;
+		float latePeak = 0f;
+		for(int i = 0; i < 360; i++){
+			simulation.update(1f / 60f);
+			float current = simulation.displacement(center);
+			if(Math.abs(current) > 0.02f){
+				int currentSign = Math.round(Math.signum(current));
+				if(currentSign != lastSign){
+					signChanges++;
+					lastSign = currentSign;
+				}
+			}
+			if(i > 180)
+				latePeak = Math.max(latePeak, simulation.maxAbsDisplacement());
+		}
+
+		assertTrue(signChanges >= 2);
+		assertTrue(latePeak < initialPeak);
+	}
+
+	@Test
+	public void surfaceSimulationEventuallyEquilibrates(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.45f, 0.8f, 0.5f);
+		for(int i = 0; i < 2400; i++)
+			simulation.update(1f / 60f);
+
+		assertFalse(simulation.hasMotion());
+		assertEquals(0f, simulation.maxAbsDisplacement(), 0.0001f);
+	}
+
+	@Test
 	public void surfaceSimulationSamplesStayInsideWaterBounds(){
 		WaterSplashSystem.WaterSurfaceSimulation simulation =
 				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
@@ -198,5 +237,49 @@ public class WaterSplashSystemTest {
 		assertEquals(-2f, simulation.localX(0), 0.0001f);
 		assertEquals(2f, simulation.localX(simulation.sampleCount - 1), 0.0001f);
 		assertEquals(simulation.sampleCount - 1, simulation.nearestSample(99f));
+	}
+
+	@Test
+	public void waterSurfaceMeshIsFlatWithoutSimulation(){
+		int sampleCount = WaterSplashSystem.calculateSurfaceSampleCount(2f);
+		float[] vertices = new float[(sampleCount + 2) * 2];
+
+		int count = WaterSurfaceRenderer.buildLocalPolygonVertices(2f, 1f, null, vertices);
+
+		assertEquals((sampleCount + 2) * 2, count);
+		assertEquals(-2f, vertices[0], 0.0001f);
+		assertEquals(-1f, vertices[1], 0.0001f);
+		assertEquals(2f, vertices[2], 0.0001f);
+		assertEquals(-1f, vertices[3], 0.0001f);
+		for(int i = 5; i < count; i += 2)
+			assertEquals(1f, vertices[i], 0.0001f);
+	}
+
+	@Test
+	public void waterSurfaceMeshUsesSimulationDisplacement(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+		int center = simulation.nearestSample(0f);
+		float[] vertices = new float[(simulation.sampleCount + 2) * 2];
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
+		WaterSurfaceRenderer.buildLocalPolygonVertices(2f, 1f, simulation, vertices);
+		int centerVertexIndex = 2 + (simulation.sampleCount - 1 - center);
+		float centerSurfaceY = vertices[centerVertexIndex * 2 + 1];
+
+		assertTrue(centerSurfaceY < 1f);
+	}
+
+	@Test
+	public void waterSurfaceMeshClampsBeforeItCanInvert(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+		float[] vertices = new float[(simulation.sampleCount + 2) * 2];
+		simulation.displacements[simulation.nearestSample(0f)] = -20f;
+
+		int count = WaterSurfaceRenderer.buildLocalPolygonVertices(2f, 1f, simulation, vertices);
+
+		for(int i = 5; i < count; i += 2)
+			assertTrue(vertices[i] >= 0.35f);
 	}
 }
