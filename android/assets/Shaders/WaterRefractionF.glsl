@@ -49,5 +49,5 @@ void main(){
 	color += vec3(0.04, 0.07, 0.08) * surfaceBend * v_color.a;
 	color += vec3(0.06, 0.09, 0.08) * caustic;
 
-	gl_FragColor = vec4(color, clamp(v_color.a, 0.0, 1.0));
+	gl_FragColor = vec4(color, 1.0);
 }
