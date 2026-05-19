@@ -6,7 +6,7 @@ test('web entrypoint uses the current bundle cache token', async ({ page }) => {
 
   const scriptSource = await page.locator('script[src*="html.nocache.js"]').getAttribute('src');
 
-  expect(scriptSource).toContain('20260519-visible-waves-pan-restart1');
+  expect(scriptSource).toContain('20260519-wave-merge-pan2');
 });
 
 test('auto-advances through every level without a black screen', async ({ page }, testInfo) => {
@@ -261,7 +261,17 @@ test('desktop editor keeps right-drag pan and wheel zoom after object placement'
     const beforeCount = beforeEvents.filter(line => line.includes('level editor camera')).length;
     await page.mouse.move(720, 360);
     await page.mouse.down({ button: 'right' });
-    await page.mouse.move(640, 405, { steps: 8 });
+    await page.mouse.move(690, 377, { steps: 4 });
+    const activeContextMenuPrevented = await page.evaluate(() => {
+      const target = document.querySelector('canvas') || document.getElementById('embed-html');
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(activeContextMenuPrevented).toBe(true);
+
+    await page.mouse.move(560, 455, { steps: 16 });
+    await waitForDebugEventCount(page, 'level editor camera', beforeCount + 4, 10000);
     await page.mouse.up({ button: 'right' });
     await waitForDebugEventCount(page, 'level editor camera', beforeCount + 1, 10000);
     const afterPan = parseEditorCameraEvent(await latestDebugEvent(page, 'level editor camera'));

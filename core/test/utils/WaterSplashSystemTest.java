@@ -157,6 +157,63 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void travelingWaveSpawnSpeedIsDoubled(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 3f);
+
+		simulation.applyImpact(0f, 0.5f, 1f, 0.5f, 2);
+
+		WaterSplashSystem.TravelingWave wave = simulation.travelingWaves.first();
+		float previousSpeed = 1.85f + 0.5f * 1.05f + 1f * 0.08f;
+		assertEquals(previousSpeed * 2f, wave.speed, 0.0001f);
+	}
+
+	@Test
+	public void travelingWaveBounceReducesSpeedAndSize(){
+		WaterSplashSystem.TravelingWave wave =
+				new WaterSplashSystem.TravelingWave(0.95f, 1, 0.6f, 0.5f, 10f, 0.4f, 0f);
+
+		wave.update(0.02f, 1f);
+
+		assertEquals(-1, wave.direction);
+		assertEquals(9f, wave.speed, 0.0001f);
+		assertEquals(0.368f, wave.width, 0.0001f);
+		assertEquals(1, wave.bounceCount);
+		assertFalse(wave.isExpired());
+	}
+
+	@Test
+	public void lowAmplitudeTravelingWaveMergesBeforeExpiring(){
+		WaterSplashSystem.TravelingWave wave =
+				new WaterSplashSystem.TravelingWave(0f, 1, 0.03f, 0.5f, 2f, 0.4f, 0f);
+
+		boolean startedMerge = wave.update(1f / 60f, 2f);
+		float initialAlpha = wave.visualAlpha();
+		wave.update(0.6f, 2f);
+
+		assertTrue(startedMerge);
+		assertFalse(wave.isExpired());
+		assertTrue(wave.visualAlpha() < initialAlpha);
+
+		wave.update(0.7f, 2f);
+
+		assertTrue(wave.isExpired());
+	}
+
+	@Test
+	public void mergingTravelingWaveTransfersResidualToSpringSurface(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 3f);
+		simulation.travelingWaves.add(new WaterSplashSystem.TravelingWave(0f, 1, 0.03f, 0.5f, 2f, 0.4f, 0f));
+		simulation.energy = 0.03f;
+
+		simulation.update(1f / 60f);
+
+		assertTrue(Math.abs(simulation.springDisplacementAt(0f)) > 0.0001f);
+		assertEquals(1, simulation.travelingWaveCount());
+	}
+
+	@Test
 	public void crestAndTroughUseDifferentVisibleColors(){
 		Color water = new Color(0f, 0.53f, 0.32f, 0.55f);
 		Color crest = WaterSplashSystem.setWaveColor(water, true, 0.55f, new Color());
@@ -272,7 +329,7 @@ public class WaterSplashSystemTest {
 
 		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
 		float initialRightCenter = firstWaveCenter(simulation, 1);
-		for(int i = 0; i < 30; i++)
+		for(int i = 0; i < 5; i++)
 			simulation.update(1f / 60f);
 
 		assertTrue(firstWaveCenter(simulation, 1) > initialRightCenter);

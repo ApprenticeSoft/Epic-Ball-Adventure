@@ -68,6 +68,57 @@ public final class EditorBrowserBridge {
 		var eventScreenY = function(event) {
 			return Math.round(event.clientY || 0);
 		};
+		var activePanSource = function(source) {
+			return windowRef.__epicBallEditorPointerDrag
+					&& windowRef.__epicBallEditorPointerPanSource === source;
+		};
+		var beginPan = function(event, source) {
+			if(!isEditorCanvasTarget(event) || !isSecondaryButtonEvent(event))
+				return false;
+			if(!windowRef.__epicBallEditorPointerDrag){
+				windowRef.__epicBallEditorPointerDrag = true;
+				windowRef.__epicBallEditorPointerPanSource = source;
+				@utils.EditorBrowserBridge::browserPanStart(II)(eventScreenX(event), eventScreenY(event));
+			}
+			consumeEditorBrowserGesture(event);
+			return true;
+		};
+		var movePan = function(event, source) {
+			if(activePanSource(source)){
+				@utils.EditorBrowserBridge::browserPanMove(II)(eventScreenX(event), eventScreenY(event));
+				consumeEditorBrowserGesture(event);
+				return true;
+			}
+			if(isEditorCanvasEvent(event) && isSecondaryButtonEvent(event)){
+				consumeEditorBrowserGesture(event);
+				return true;
+			}
+			return false;
+		};
+		var endPan = function(event, source) {
+			if(activePanSource(source)){
+				@utils.EditorBrowserBridge::browserPanEnd(II)(eventScreenX(event), eventScreenY(event));
+				windowRef.__epicBallEditorPointerDrag = false;
+				windowRef.__epicBallEditorPointerPanSource = null;
+				consumeEditorBrowserGesture(event);
+				return true;
+			}
+			if(isEditorCanvasEvent(event) && isSecondaryButtonEvent(event)){
+				consumeEditorBrowserGesture(event);
+				return true;
+			}
+			return false;
+		};
+		var cancelPan = function(event, source) {
+			if(activePanSource(source)){
+				@utils.EditorBrowserBridge::browserPanEnd(II)(eventScreenX(event), eventScreenY(event));
+				windowRef.__epicBallEditorPointerDrag = false;
+				windowRef.__epicBallEditorPointerPanSource = null;
+				consumeEditorBrowserGesture(event);
+				return true;
+			}
+			return false;
+		};
 		$doc.addEventListener("keydown", function(event) {
 			if(!windowRef.__epicBallEditorShortcutsActive)
 				return;
@@ -78,70 +129,37 @@ public final class EditorBrowserBridge {
 				event.preventDefault();
 		}, true);
 		$doc.addEventListener("contextmenu", function(event) {
-			if(isEditorCanvasEvent(event))
-				preventEditorBrowserGesture(event);
+			if(isEditorCanvasEvent(event)){
+				if(windowRef.__epicBallEditorPointerDrag)
+					consumeEditorBrowserGesture(event);
+				else
+					preventEditorBrowserGesture(event);
+			}
 		}, {capture: true, passive: false});
 		$doc.addEventListener("auxclick", function(event) {
 			if(isEditorCanvasEvent(event))
 				preventEditorBrowserGesture(event);
 		}, {capture: true, passive: false});
 		$doc.addEventListener("pointerdown", function(event) {
-			if(isEditorCanvasTarget(event) && isSecondaryButtonEvent(event)){
-				windowRef.__epicBallEditorPointerDrag = true;
-				windowRef.__epicBallEditorPointerPanSource = "pointer";
-				@utils.EditorBrowserBridge::browserPanStart(II)(eventScreenX(event), eventScreenY(event));
-				consumeEditorBrowserGesture(event);
-			}
+			beginPan(event, "pointer");
 		}, {capture: true, passive: false});
-		$doc.addEventListener("pointermove", function(event) {
-			if(isEditorCanvasEvent(event) && isSecondaryButtonEvent(event)){
-				if(windowRef.__epicBallEditorPointerDrag && windowRef.__epicBallEditorPointerPanSource === "pointer")
-					@utils.EditorBrowserBridge::browserPanMove(II)(eventScreenX(event), eventScreenY(event));
-				consumeEditorBrowserGesture(event);
-			}
+		windowRef.addEventListener("pointermove", function(event) {
+			movePan(event, "pointer");
 		}, {capture: true, passive: false});
-		$doc.addEventListener("pointerup", function(event) {
-			if(isEditorCanvasEvent(event) && (isSecondaryButtonEvent(event) || windowRef.__epicBallEditorPointerDrag)){
-				if(windowRef.__epicBallEditorPointerDrag && windowRef.__epicBallEditorPointerPanSource === "pointer")
-					@utils.EditorBrowserBridge::browserPanEnd(II)(eventScreenX(event), eventScreenY(event));
-				consumeEditorBrowserGesture(event);
-			}
-			windowRef.__epicBallEditorPointerDrag = false;
-			windowRef.__epicBallEditorPointerPanSource = null;
+		windowRef.addEventListener("pointerup", function(event) {
+			endPan(event, "pointer");
 		}, {capture: true, passive: false});
-		$doc.addEventListener("pointercancel", function(event) {
-			if(windowRef.__epicBallEditorPointerDrag)
-				@utils.EditorBrowserBridge::browserPanEnd(II)(eventScreenX(event), eventScreenY(event));
-			windowRef.__epicBallEditorPointerDrag = false;
-			windowRef.__epicBallEditorPointerPanSource = null;
+		windowRef.addEventListener("pointercancel", function(event) {
+			cancelPan(event, "pointer");
 		}, {capture: true, passive: false});
 		$doc.addEventListener("mousedown", function(event) {
-			if(isEditorCanvasTarget(event) && isSecondaryButtonEvent(event)){
-				if(!windowRef.__epicBallEditorPointerDrag){
-					windowRef.__epicBallEditorPointerDrag = true;
-					windowRef.__epicBallEditorPointerPanSource = "mouse";
-					@utils.EditorBrowserBridge::browserPanStart(II)(eventScreenX(event), eventScreenY(event));
-				}
-				consumeEditorBrowserGesture(event);
-			}
+			beginPan(event, "mouse");
 		}, {capture: true, passive: false});
-		$doc.addEventListener("mousemove", function(event) {
-			if(isEditorCanvasEvent(event) && isSecondaryButtonEvent(event)){
-				if(windowRef.__epicBallEditorPointerDrag && windowRef.__epicBallEditorPointerPanSource === "mouse")
-					@utils.EditorBrowserBridge::browserPanMove(II)(eventScreenX(event), eventScreenY(event));
-				consumeEditorBrowserGesture(event);
-			}
+		windowRef.addEventListener("mousemove", function(event) {
+			movePan(event, "mouse");
 		}, {capture: true, passive: false});
-		$doc.addEventListener("mouseup", function(event) {
-			if(isEditorCanvasEvent(event) && (isSecondaryButtonEvent(event) || windowRef.__epicBallEditorPointerDrag)){
-				if(windowRef.__epicBallEditorPointerDrag && windowRef.__epicBallEditorPointerPanSource === "mouse")
-					@utils.EditorBrowserBridge::browserPanEnd(II)(eventScreenX(event), eventScreenY(event));
-				consumeEditorBrowserGesture(event);
-			}
-			if(windowRef.__epicBallEditorPointerPanSource === "mouse"){
-				windowRef.__epicBallEditorPointerDrag = false;
-				windowRef.__epicBallEditorPointerPanSource = null;
-			}
+		windowRef.addEventListener("mouseup", function(event) {
+			endPan(event, "mouse");
 		}, {capture: true, passive: false});
 		$doc.addEventListener("dragstart", function(event) {
 			if(isEditorCanvasEvent(event))

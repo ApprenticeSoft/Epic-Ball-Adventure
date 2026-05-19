@@ -35,12 +35,17 @@ public class WaterSplashSystem {
 	private static final int MIN_VISIBLE_WAVES = 2;
 	private static final int MAX_VISIBLE_WAVES = 10;
 	private static final int MAX_TRAVELING_WAVES = 48;
-	private static final int TRAVELING_WAVE_MAX_BOUNCES = 10;
 	private static final float TRAVELING_WAVE_BASE_SPEED = 1.85f;
 	private static final float TRAVELING_WAVE_SPEED_SCALE = 1.05f;
+	private static final float TRAVELING_WAVE_SPEED_MULTIPLIER = 2f;
 	private static final float TRAVELING_WAVE_BOUNCE_DAMPING = 0.76f;
+	private static final float TRAVELING_WAVE_BOUNCE_SPEED_DAMPING = 0.90f;
+	private static final float TRAVELING_WAVE_BOUNCE_SIZE_DAMPING = 0.92f;
 	private static final float TRAVELING_WAVE_DAMPING_PER_SECOND = 0.935f;
-	private static final float TRAVELING_WAVE_MIN_AMPLITUDE = 0.01f;
+	private static final float TRAVELING_WAVE_MERGE_AMPLITUDE = 0.035f;
+	private static final float TRAVELING_WAVE_VISUAL_FADE_AMPLITUDE = 0.09f;
+	private static final float TRAVELING_WAVE_MERGE_DURATION = 1.2f;
+	private static final float TRAVELING_WAVE_MERGE_TRANSFER = 0.28f;
 	private static final float TRAVELING_WAVE_MAX_AGE = 18f;
 	private static final float VISUAL_WAVE_MIN_ALPHA = 0.34f;
 	private static final float VISUAL_WAVE_MAX_ALPHA = 1f;
@@ -885,8 +890,8 @@ public class WaterSplashSystem {
 				float falloff = (float)Math.pow(0.86f, rank);
 				float polarity = rank % 2 == 0 ? -0.82f : 1f;
 				float waveAmplitude = amplitude * (0.52f + waveCount * 0.026f) * falloff;
-				float speed = TRAVELING_WAVE_BASE_SPEED + amplitude * TRAVELING_WAVE_SPEED_SCALE
-						+ size * 0.08f + rank * 0.035f;
+				float speed = (TRAVELING_WAVE_BASE_SPEED + amplitude * TRAVELING_WAVE_SPEED_SCALE
+						+ size * 0.08f + rank * 0.035f) * TRAVELING_WAVE_SPEED_MULTIPLIER;
 				float offset = sampleSpacing * 0.6f + spacing * rank;
 				float centerX = startX + direction * offset;
 				addTravelingWave(new TravelingWave(reflectIntoBounds(centerX, halfWidth), direction, waveAmplitude,
@@ -914,10 +919,33 @@ public class WaterSplashSystem {
 		private void updateTravelingWaves(float delta){
 			for(int i = travelingWaves.size - 1; i >= 0; i--){
 				TravelingWave wave = travelingWaves.get(i);
-				wave.update(delta, halfWidth);
+				boolean startedMerge = wave.update(delta, halfWidth);
+				if(startedMerge)
+					mergeTravelingWaveIntoSpring(wave);
 				if(wave.isExpired())
 					travelingWaves.removeIndex(i);
 			}
+		}
+
+		private void mergeTravelingWaveIntoSpring(TravelingWave wave){
+			float radius = Math.max(sampleSpacing * 1.5f, wave.width);
+			int center = nearestSample(wave.centerX);
+			int sampleRadius = Math.max(1, MathUtils.ceil(radius / sampleSpacing));
+			for(int offset = -sampleRadius; offset <= sampleRadius; offset++){
+				int index = center + offset;
+				if(index < 0 || index >= sampleCount)
+					continue;
+				float localX = localX(index);
+				float normalizedDistance = Math.abs(localX - wave.centerX) / radius;
+				if(normalizedDistance >= 1f)
+					continue;
+				float envelope = MathUtils.cos(normalizedDistance * MathUtils.PI * 0.5f);
+				envelope *= envelope;
+				float residual = wave.displacementAt(localX) * envelope * TRAVELING_WAVE_MERGE_TRANSFER;
+				displacements[index] += residual;
+				velocities[index] += residual * 1.35f;
+			}
+			clampMotion();
 		}
 
 		int nearestSample(float localX){
@@ -945,6 +973,9 @@ public class WaterSplashSystem {
 		float polarity;
 		float age;
 		int bounceCount;
+		boolean merging;
+		float mergeAge;
+		float mergeStartAmplitude;
 
 		TravelingWave(float centerX, int direction, float amplitude, float wavelength, float speed, float width,
 				float phase){
@@ -963,8 +994,16 @@ public class WaterSplashSystem {
 			this.polarity = polarity < 0f ? -1f : 1f;
 		}
 
-		void update(float delta, float halfWidth){
+		boolean update(float delta, float halfWidth){
 			age += delta;
+			if(merging){
+				mergeAge += delta;
+				float progress = smoothStep(MathUtils.clamp(mergeAge / TRAVELING_WAVE_MERGE_DURATION, 0f, 1f));
+				amplitude = mergeStartAmplitude * (1f - progress);
+				speed *= (float)Math.pow(TRAVELING_WAVE_BOUNCE_SPEED_DAMPING, delta);
+				return false;
+			}
+
 			centerX += direction * speed * delta;
 			for(int i = 0; i < 8 && (centerX < -halfWidth || centerX > halfWidth); i++){
 				if(centerX < -halfWidth){
@@ -976,10 +1015,24 @@ public class WaterSplashSystem {
 					direction = -1;
 				}
 				amplitude *= TRAVELING_WAVE_BOUNCE_DAMPING;
+				speed *= TRAVELING_WAVE_BOUNCE_SPEED_DAMPING;
+				width = Math.max(0.03f, width * TRAVELING_WAVE_BOUNCE_SIZE_DAMPING);
 				bounceCount++;
 			}
 			centerX = MathUtils.clamp(centerX, -halfWidth, halfWidth);
 			amplitude *= (float)Math.pow(TRAVELING_WAVE_DAMPING_PER_SECOND, delta);
+			if(amplitude <= TRAVELING_WAVE_MERGE_AMPLITUDE || age >= TRAVELING_WAVE_MAX_AGE)
+				return startMerging();
+			return false;
+		}
+
+		private boolean startMerging(){
+			if(merging)
+				return false;
+			merging = true;
+			mergeAge = 0f;
+			mergeStartAmplitude = amplitude;
+			return true;
 		}
 
 		float displacementAt(float localX){
@@ -1001,8 +1054,12 @@ public class WaterSplashSystem {
 		}
 
 		float visualAlpha(){
-			return MathUtils.clamp(0.18f + Math.abs(amplitude) * 1.15f, VISUAL_WAVE_MIN_ALPHA,
+			float absAmplitude = Math.abs(amplitude);
+			float fadeScale = absAmplitude >= TRAVELING_WAVE_VISUAL_FADE_AMPLITUDE ? 1f
+					: smoothStep(MathUtils.clamp(absAmplitude / TRAVELING_WAVE_VISUAL_FADE_AMPLITUDE, 0f, 1f));
+			float alpha = MathUtils.clamp(0.18f + absAmplitude * 1.15f, VISUAL_WAVE_MIN_ALPHA,
 					VISUAL_WAVE_MAX_ALPHA);
+			return alpha * fadeScale;
 		}
 
 		float visualThickness(){
@@ -1011,9 +1068,13 @@ public class WaterSplashSystem {
 		}
 
 		boolean isExpired(){
-			return amplitude < TRAVELING_WAVE_MIN_AMPLITUDE || age > TRAVELING_WAVE_MAX_AGE
-					|| bounceCount > TRAVELING_WAVE_MAX_BOUNCES;
+			return merging && mergeAge >= TRAVELING_WAVE_MERGE_DURATION;
 		}
+	}
+
+	static float smoothStep(float value){
+		float t = MathUtils.clamp(value, 0f, 1f);
+		return t * t * (3f - 2f * t);
 	}
 
 	static int calculateSurfaceSampleCount(float halfWidth){
