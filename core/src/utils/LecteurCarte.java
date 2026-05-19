@@ -24,6 +24,7 @@ import com.badlogic.gdx.maps.objects.PolygonMapObject;
 import com.badlogic.gdx.maps.objects.PolylineMapObject;
 import com.badlogic.gdx.maps.objects.RectangleMapObject;
 import com.badlogic.gdx.maps.tiled.TiledMap;
+import com.badlogic.gdx.physics.box2d.BodyDef.BodyType;
 import com.badlogic.gdx.physics.box2d.World;
 import com.badlogic.gdx.utils.Array;
 import com.one.button.jam.Couleurs;
@@ -185,10 +186,16 @@ public class LecteurCarte {
 
 	public void draw(SpriteBatch batch, TextureAtlas textureAtlas){
 		//drawOmbre(batch, textureAtlas);
-		drawPlateforme(batch, textureAtlas);
+		drawBehindWater(batch, textureAtlas);
+		drawWaterOccluders(batch, textureAtlas);
+	}
+
+	public void drawBehindWater(SpriteBatch batch, TextureAtlas textureAtlas){
 		drawBalle(batch, textureAtlas);
-		drawSpring(batch, textureAtlas);
-		drawObstacle(batch, textureAtlas);
+		for(Obstacle obstacle : obstaclesOrganises){
+			if(shouldDrawBehindWater(obstacle))
+				obstacle.draw(batch, textureAtlas);
+		}
 	}
 
 	public void drawBalle(SpriteBatch batch, TextureAtlas textureAtlas){
@@ -221,24 +228,45 @@ public class LecteurCarte {
         }
 	}
 
+	public void drawWaterOccluders(SpriteBatch batch, TextureAtlas textureAtlas){
+		drawPlateforme(batch, textureAtlas);
+		drawSpring(batch, textureAtlas);
+		drawObstacle(batch, textureAtlas);
+	}
+
 	public void drawObstacle(SpriteBatch batch, TextureAtlas textureAtlas){
 		 for(Obstacle obstacle : obstaclesOrganises){
-			 if(!(obstacle instanceof Eau))
+			 if(!(obstacle instanceof Eau) && !shouldDrawBehindWater(obstacle))
 				 obstacle.draw(batch, textureAtlas);
 		 }
 	}
 
 	public void drawRippleOccluders(SpriteBatch batch, TextureAtlas textureAtlas){
-		drawPlateforme(batch, textureAtlas);
-		drawSpring(batch, textureAtlas);
-		for(Obstacle obstacle : obstaclesOrganises){
-			if(!(obstacle instanceof Eau))
-				obstacle.draw(batch, textureAtlas);
-		}
+		drawWaterOccluders(batch, textureAtlas);
+	}
+
+	static boolean shouldDrawBehindWater(Obstacle obstacle){
+		return obstacle != null && obstacle.body != null && !(obstacle instanceof Eau)
+				&& isBehindWaterBodyType(obstacle.body.getType());
+	}
+
+	static boolean isBehindWaterBodyType(BodyType bodyType){
+		return bodyType == BodyType.DynamicBody;
 	}
 
 	public void drawPolygone(PolygonSpriteBatch batch, MyCamera camera){
         for(Polygone polygone : polygones){
+			if(shouldDrawBehindWater(polygone))
+				continue;
+	polygone.setPos(0, 0);
+	polygone.draw(batch, couleurs);
+        }
+	}
+
+	public void drawPolygoneBehindWater(PolygonSpriteBatch batch, MyCamera camera){
+        for(Polygone polygone : polygones){
+			if(!shouldDrawBehindWater(polygone))
+				continue;
 	polygone.setPos(0, 0);
 	polygone.draw(batch, couleurs);
         }

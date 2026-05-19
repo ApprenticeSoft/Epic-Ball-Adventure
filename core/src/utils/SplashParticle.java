@@ -97,9 +97,13 @@ final class SplashParticle {
 	}
 
 	void mergeWithWater(Eau water, float surfaceLocalX){
+		mergeWithWater(water, surfaceLocalX, water.getSurfacePoint(surfaceLocalX), water.getSurfaceAngleDegrees());
+	}
+
+	void mergeWithWater(Eau water, float surfaceLocalX, Vector2 surfacePoint, float surfaceAngleDegrees){
 		this.water = water;
 		waterLocalX = surfaceLocalX;
-		position.set(water.getSurfacePoint(surfaceLocalX));
+		position.set(surfacePoint);
 		velocity.setZero();
 		age = 0f;
 		lifetime = 0.45f;
@@ -109,7 +113,7 @@ final class SplashParticle {
 		startThickness = thickness;
 		targetLength = length;
 		targetThickness = thickness;
-		angleDegrees = water.getSurfaceAngleDegrees();
+		angleDegrees = surfaceAngleDegrees;
 		alpha = Math.min(alpha, water.getCouleur() == null ? 1f : water.getCouleur().a);
 		state = SplashParticleState.RIPPLE;
 	}

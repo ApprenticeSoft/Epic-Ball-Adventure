@@ -477,22 +477,18 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	private void drawGameplay(){
         tiledMapRenderer.setView(camera);
+        game.batch.setProjectionMatrix(camera.combined);
+        game.batch.begin();
+		lecteurCarte.drawBehindWater(game.batch, textureAtlas);
+		game.batch.end();
+
 		if(waterSplashSystem != null){
 			polyBatch.setProjectionMatrix(camera.combined);
 			polyBatch.begin();
+			lecteurCarte.drawPolygoneBehindWater(polyBatch, camera);
 			lecteurCarte.drawWater(polyBatch, textureAtlas, waterSplashSystem);
 			polyBatch.end();
 		}
-
-        game.batch.setProjectionMatrix(camera.combined);
-        game.batch.begin();
-		lecteurCarte.draw(game.batch, textureAtlas/*, couleurs*/);
-		game.batch.end();
-
-		polyBatch.setProjectionMatrix(camera.combined);
-		polyBatch.begin();
-		lecteurCarte.drawPolygone(polyBatch, camera);
-		polyBatch.end();
 
 		if(waterSplashSystem != null){
 			game.batch.setProjectionMatrix(camera.combined);
@@ -510,6 +506,17 @@ public class GameScreen extends InputAdapter implements Screen{
 			game.batch.begin();
 			waterSplashSystem.drawDropletsAndSplats(game.batch, textureAtlas, couleurs.getCouleurEau());
 			game.batch.end();
+		}
+		else{
+			game.batch.setProjectionMatrix(camera.combined);
+			game.batch.begin();
+			lecteurCarte.drawWaterOccluders(game.batch, textureAtlas);
+			game.batch.end();
+
+			polyBatch.setProjectionMatrix(camera.combined);
+			polyBatch.begin();
+			lecteurCarte.drawPolygone(polyBatch, camera);
+			polyBatch.end();
 		}
 	}
 

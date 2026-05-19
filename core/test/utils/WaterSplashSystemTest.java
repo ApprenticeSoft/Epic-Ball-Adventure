@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.physics.box2d.BodyDef.BodyType;
 import org.junit.jupiter.api.Test;
 
 public class WaterSplashSystemTest {
@@ -237,6 +238,25 @@ public class WaterSplashSystemTest {
 		assertEquals(-2f, simulation.localX(0), 0.0001f);
 		assertEquals(2f, simulation.localX(simulation.sampleCount - 1), 0.0001f);
 		assertEquals(simulation.sampleCount - 1, simulation.nearestSample(99f));
+	}
+
+	@Test
+	public void surfaceSimulationInterpolatesDisplacementAtLocalX(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+		int center = simulation.nearestSample(0f);
+		simulation.displacements[center] = 0.2f;
+		simulation.displacements[center + 1] = 0.8f;
+		float halfwayX = (simulation.localX(center) + simulation.localX(center + 1)) * 0.5f;
+
+		assertEquals(0.5f, simulation.displacementAt(halfwayX), 0.0001f);
+	}
+
+	@Test
+	public void waterRenderPassPlacesOnlyDynamicBodiesBehindWater(){
+		assertTrue(LecteurCarte.isBehindWaterBodyType(BodyType.DynamicBody));
+		assertFalse(LecteurCarte.isBehindWaterBodyType(BodyType.StaticBody));
+		assertFalse(LecteurCarte.isBehindWaterBodyType(BodyType.KinematicBody));
 	}
 
 	@Test

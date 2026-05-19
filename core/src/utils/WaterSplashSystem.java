@@ -40,6 +40,11 @@ public class WaterSplashSystem {
 	private final Vector2 rayHitPoint = new Vector2();
 	private final Vector2 rayHitNormal = new Vector2();
 	private final Vector2 drawPoint = new Vector2();
+	private final Vector2 mergeSurfacePoint = new Vector2();
+	private final Vector2 rippleStartPoint = new Vector2();
+	private final Vector2 rippleEndPoint = new Vector2();
+	private final Vector2 surfaceAngleStartPoint = new Vector2();
+	private final Vector2 surfaceAngleEndPoint = new Vector2();
 	private final RippleSegment[] rippleSegments = new RippleSegment[]{
 			new RippleSegment(), new RippleSegment(), new RippleSegment()
 	};
@@ -204,7 +209,9 @@ public class WaterSplashSystem {
 		boolean waterSurfaceHit = canHit && findWaterSurfaceHit(previousPosition, particle.position);
 
 		if(waterSurfaceHit && (!hardSurfaceHit || waterHitFraction <= rayHitFraction)){
-			particle.mergeWithWater(waterHit, waterHitLocalX);
+			surfacePoint(waterHit, waterHitLocalX, mergeSurfacePoint);
+			particle.mergeWithWater(waterHit, waterHitLocalX, mergeSurfacePoint,
+					surfaceAngleDegrees(waterHit, waterHitLocalX));
 			return;
 		}
 
@@ -227,22 +234,31 @@ public class WaterSplashSystem {
 		for(Eau water : waters){
 			Vector2 localFrom = water.getLocalPointCopy(from);
 			Vector2 localTo = water.getLocalPointCopy(to);
-			float surfaceY = water.getSurfaceLocalY();
-			if(localFrom.y < surfaceY || localTo.y > surfaceY)
-				continue;
-			float deltaY = localFrom.y - localTo.y;
-			if(Math.abs(deltaY) < 0.0001f)
-				continue;
-			float fraction = (localFrom.y - surfaceY) / deltaY;
-			if(fraction < 0f || fraction > 1f)
-				continue;
-			float localX = localFrom.x + (localTo.x - localFrom.x) * fraction;
-			if(!water.containsSurfaceLocalX(localX))
-				continue;
-			if(fraction < waterHitFraction){
-				waterHit = water;
-				waterHitFraction = fraction;
-				waterHitLocalX = localX;
+			float previousFraction = 0f;
+			float previousX = localFrom.x;
+			float previousDistance = localFrom.y - surfaceLocalY(water, previousX);
+			int steps = MathUtils.clamp(MathUtils.ceil(localFrom.dst(localTo) / 0.16f), 4, 16);
+			for(int step = 1; step <= steps; step++){
+				float fraction = step / (float)steps;
+				float localX = MathUtils.lerp(localFrom.x, localTo.x, fraction);
+				float localY = MathUtils.lerp(localFrom.y, localTo.y, fraction);
+				float distance = localY - surfaceLocalY(water, localX);
+				if(previousDistance >= 0f && distance <= 0f){
+					float denominator = previousDistance - distance;
+					float localFraction = denominator <= 0.0001f ? 0f : previousDistance / denominator;
+					float hitFraction = MathUtils.lerp(previousFraction, fraction,
+							MathUtils.clamp(localFraction, 0f, 1f));
+					float hitLocalX = MathUtils.lerp(previousX, localX, MathUtils.clamp(localFraction, 0f, 1f));
+					if(water.containsSurfaceLocalX(hitLocalX) && hitFraction < waterHitFraction){
+						waterHit = water;
+						waterHitFraction = hitFraction;
+						waterHitLocalX = hitLocalX;
+					}
+					break;
+				}
+				previousFraction = fraction;
+				previousX = localX;
+				previousDistance = distance;
 			}
 		}
 		return waterHit != null;
@@ -310,19 +326,32 @@ public class WaterSplashSystem {
 		float alpha = capToWaterAlpha(particle.renderAlpha() * segment.alphaScale, waterAlpha(waterColor));
 		if(alpha <= 0f)
 			return;
-		particle.water.getSurfacePoint((segment.start + segment.end) * 0.5f, drawPoint);
 		batch.setColor(waterColor.r, waterColor.g, waterColor.b, alpha);
 		float thickness = particle.renderThickness();
-		batch.draw(region,
-				drawPoint.x - length * 0.5f,
-				drawPoint.y - thickness * 0.5f,
-				length * 0.5f,
-				thickness * 0.5f,
-				length,
-				thickness,
-				1,
-				1,
-				particle.water.getSurfaceAngleDegrees());
+		int subSegmentCount = MathUtils.clamp(MathUtils.ceil(length / SURFACE_SAMPLE_SPACING), 1, 64);
+		float step = length / subSegmentCount;
+		for(int i = 0; i < subSegmentCount; i++){
+			float start = segment.start + step * i;
+			float end = i == subSegmentCount - 1 ? segment.end : start + step;
+			surfacePoint(particle.water, start, rippleStartPoint);
+			surfacePoint(particle.water, end, rippleEndPoint);
+			float subLength = rippleStartPoint.dst(rippleEndPoint);
+			if(subLength <= 0.01f)
+				continue;
+			drawPoint.set(rippleStartPoint).add(rippleEndPoint).scl(0.5f);
+			float angle = (float)Math.atan2(rippleEndPoint.y - rippleStartPoint.y,
+					rippleEndPoint.x - rippleStartPoint.x) * MathUtils.radiansToDegrees;
+			batch.draw(region,
+					drawPoint.x - subLength * 0.5f,
+					drawPoint.y - thickness * 0.5f,
+					subLength * 0.5f,
+					thickness * 0.5f,
+					subLength,
+					thickness,
+					1,
+					1,
+					angle);
+		}
 	}
 
 	private void drawFlatParticle(SpriteBatch batch, TextureRegion region, SplashParticle particle){
@@ -371,6 +400,32 @@ public class WaterSplashSystem {
 			if(simulation.water == water)
 				return simulation;
 		return null;
+	}
+
+	float surfaceDisplacement(Eau water, float localX){
+		WaterSurfaceSimulation simulation = findSurfaceSimulation(water);
+		return simulation == null ? 0f : simulation.displacementAt(localX);
+	}
+
+	Vector2 surfacePoint(Eau water, float localX, Vector2 out){
+		return water.getSurfacePoint(localX, surfaceLocalY(water, localX) - water.getSurfaceLocalY(), out);
+	}
+
+	float surfaceAngleDegrees(Eau water, float localX){
+		WaterSurfaceSimulation simulation = findSurfaceSimulation(water);
+		if(simulation == null)
+			return water.getSurfaceAngleDegrees();
+		float offset = Math.max(0.02f, simulation.sampleSpacing * 0.5f);
+		surfacePoint(water, localX - offset, surfaceAngleStartPoint);
+		surfacePoint(water, localX + offset, surfaceAngleEndPoint);
+		if(surfaceAngleStartPoint.dst2(surfaceAngleEndPoint) <= 0.0001f)
+			return water.getSurfaceAngleDegrees();
+		return (float)Math.atan2(surfaceAngleEndPoint.y - surfaceAngleStartPoint.y,
+				surfaceAngleEndPoint.x - surfaceAngleStartPoint.x) * MathUtils.radiansToDegrees;
+	}
+
+	private float surfaceLocalY(Eau water, float localX){
+		return WaterSurfaceRenderer.clampSurfaceY(water.height, surfaceDisplacement(water, localX));
 	}
 
 	static int collectRippleSegments(float centerLocalX, float fullLength, float halfWidth, RippleSegment[] segments){
@@ -561,6 +616,16 @@ public class WaterSplashSystem {
 
 		float displacement(int index){
 			return displacements[index];
+		}
+
+		float displacementAt(float localX){
+			float normalized = (MathUtils.clamp(localX, -halfWidth, halfWidth) + halfWidth) / (halfWidth * 2f);
+			float scaledIndex = normalized * (sampleCount - 1);
+			int leftIndex = MathUtils.clamp(MathUtils.floor(scaledIndex), 0, sampleCount - 1);
+			int rightIndex = MathUtils.clamp(leftIndex + 1, 0, sampleCount - 1);
+			if(leftIndex == rightIndex)
+				return displacements[leftIndex];
+			return MathUtils.lerp(displacements[leftIndex], displacements[rightIndex], scaledIndex - leftIndex);
 		}
 
 		float maxAbsDisplacement(){
