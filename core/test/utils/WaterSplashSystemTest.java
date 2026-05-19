@@ -240,16 +240,25 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
-	public void crestAndTroughUseDifferentVisibleColors(){
+	public void travelingWaveSpriteOverlayOnlyDrawsCrests(){
+		WaterSplashSystem.TravelingWave crest =
+				new WaterSplashSystem.TravelingWave(0f, 1, 0.35f, 0.5f, 2f, 0.4f, 0f, 1f);
+		WaterSplashSystem.TravelingWave trough =
+				new WaterSplashSystem.TravelingWave(0f, 1, 0.35f, 0.5f, 2f, 0.4f, 0f, -1f);
+
+		assertTrue(crest.drawsSpriteOverlay());
+		assertFalse(trough.drawsSpriteOverlay());
+	}
+
+	@Test
+	public void crestOverlayUsesVisibleWaterColor(){
 		Color water = new Color(0f, 0.53f, 0.32f, 0.55f);
 		Color crest = WaterSplashSystem.setWaveColor(water, true, 0.55f, new Color());
-		Color trough = WaterSplashSystem.setWaveColor(water, false, 0.55f, new Color());
 
-		assertTrue(crest.r > trough.r);
-		assertTrue(crest.g > trough.g);
-		assertTrue(crest.b > trough.b);
+		assertTrue(crest.r > water.r);
+		assertTrue(crest.g > water.g);
+		assertTrue(crest.b > water.b);
 		assertEquals(0.55f, crest.a, 0.0001f);
-		assertEquals(0.55f, trough.a, 0.0001f);
 	}
 
 	@Test

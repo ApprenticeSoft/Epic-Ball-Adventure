@@ -394,18 +394,10 @@ public class WaterSplashSystem {
 		float length = end - start;
 		if(length <= 0.01f)
 			return;
-		if(wave.polarity > 0f){
-			setWaveColor(waterColor, false, alpha * 0.42f, waveColor);
-			drawTravelingWaveSegments(batch, region, water, wave, start, end, wave.visualThickness() * 2.4f,
-					waveColor);
-			setWaveColor(waterColor, true, alpha, waveColor);
-			drawTravelingWaveSegments(batch, region, water, wave, start, end, wave.visualThickness(), waveColor);
-		}
-		else{
-			setWaveColor(waterColor, false, alpha * 0.9f, waveColor);
-			drawTravelingWaveSegments(batch, region, water, wave, start, end, wave.visualThickness() * 1.8f,
-					waveColor);
-		}
+		if(!wave.drawsSpriteOverlay())
+			return;
+		setWaveColor(waterColor, true, alpha, waveColor);
+		drawTravelingWaveSegments(batch, region, water, wave, start, end, wave.visualThickness(), waveColor);
 	}
 
 	private void drawTravelingWaveSegments(SpriteBatch batch, TextureRegion region, Eau water, TravelingWave wave,
@@ -1061,6 +1053,10 @@ public class WaterSplashSystem {
 				return 0f;
 			float envelope = MathUtils.cos(normalizedDistance * MathUtils.PI * 0.5f);
 			return envelope * envelope;
+		}
+
+		boolean drawsSpriteOverlay(){
+			return polarity > 0f;
 		}
 
 		float visualAlpha(){
