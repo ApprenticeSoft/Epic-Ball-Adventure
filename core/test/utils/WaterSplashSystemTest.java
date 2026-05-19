@@ -121,6 +121,13 @@ public class WaterSplashSystemTest {
 		assertTrue(WaterSplashSystem.calculateWaveAmplitude(2f, 0.05f, 3f, 1f) > baseline);
 	}
 
+	@Test
+	public void ballImpactCreatesVisibleWaveAmplitude(){
+		float intensity = WaterImpact.calculateIntensity(8f, 8f, 0.05f, 1.6f);
+
+		assertTrue(WaterSplashSystem.calculateWaveAmplitude(8f, 0.05f, 1.6f, intensity) > 0.65f);
+	}
+
 	private WaterSplashSystem.RippleSegment[] rippleSegments(){
 		return new WaterSplashSystem.RippleSegment[]{
 				new WaterSplashSystem.RippleSegment(),
@@ -140,6 +147,19 @@ public class WaterSplashSystemTest {
 		assertTrue(simulation.hasMotion());
 		assertTrue(simulation.displacement(center) < 0f);
 		assertTrue(simulation.renderAlpha() > 0f);
+	}
+
+	@Test
+	public void surfaceSimulationImpactCreatesVisibleSurfaceLine(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+		int center = simulation.nearestSample(0f);
+
+		simulation.applyImpact(0f, 0.8f, 1.6f, 0.5f);
+
+		assertTrue(Math.abs(simulation.displacement(center)) > 0.5f);
+		assertTrue(simulation.renderAlpha() >= 0.45f);
+		assertTrue(simulation.renderThickness() >= 0.15f);
 	}
 
 	@Test
