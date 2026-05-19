@@ -130,6 +130,21 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void visibleWaveCountIncreasesWithSpeedMassAndSize(){
+		int baseline = WaterSplashSystem.calculateVisibleWaveCount(2f, 0.05f, 0.6f, 1f);
+
+		assertTrue(WaterSplashSystem.calculateVisibleWaveCount(7f, 0.05f, 0.6f, 1f) > baseline);
+		assertTrue(WaterSplashSystem.calculateVisibleWaveCount(2f, 4f, 0.6f, 1f) > baseline);
+		assertTrue(WaterSplashSystem.calculateVisibleWaveCount(2f, 0.05f, 3f, 1f) > baseline);
+	}
+
+	@Test
+	public void visibleWaveCountIsClamped(){
+		assertEquals(2, WaterSplashSystem.calculateVisibleWaveCount(0f, 0f, 0f, 0f));
+		assertEquals(10, WaterSplashSystem.calculateVisibleWaveCount(100f, 100f, 100f, 100f));
+	}
+
+	@Test
 	public void waterSurfaceCollisionUsesDropletRadius(){
 		WaterSplashSystem.WaterSurfaceHit hit = new WaterSplashSystem.WaterSurfaceHit();
 
@@ -209,6 +224,18 @@ public class WaterSplashSystemTest {
 		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
 
 		assertTrue(simulation.travelingWaveCount() >= 4);
+		assertTrue(simulation.hasTravelingWaveDirection(-1));
+		assertTrue(simulation.hasTravelingWaveDirection(1));
+	}
+
+	@Test
+	public void surfaceImpactSpawnsRequestedVisibleWaveCount(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f, 8);
+
+		assertEquals(8, simulation.travelingWaveCount());
 		assertTrue(simulation.hasTravelingWaveDirection(-1));
 		assertTrue(simulation.hasTravelingWaveDirection(1));
 	}
