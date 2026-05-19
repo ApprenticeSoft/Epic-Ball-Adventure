@@ -12,10 +12,10 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 
 public final class WaterRefractionRenderer {
-	private static final float CALM_DISTORTION_PIXELS = 4.5f;
-	private static final float WAVE_DISTORTION_PIXELS = 26f;
-	private static final float SURFACE_RIPPLE_STRENGTH = 1.28f;
-	private static final float TINT_STRENGTH = 0.36f;
+	private static final float CALM_DISTORTION_PIXELS = 3.25f;
+	private static final float WAVE_DISTORTION_PIXELS = 25f;
+	private static final float SURFACE_RIPPLE_STRENGTH = 1.18f;
+	private static final float TINT_STRENGTH = 0.18f;
 
 	private ShaderProgram shader;
 	private FrameBuffer sceneBuffer;
@@ -24,6 +24,7 @@ public final class WaterRefractionRenderer {
 	private float time;
 	private boolean disabled;
 	private boolean captureActive;
+	private boolean capturedCurrentFrame;
 
 	public WaterRefractionRenderer(){
 		ShaderProgram.pedantic = false;
@@ -67,6 +68,7 @@ public final class WaterRefractionRenderer {
 	public boolean beginCapture(Color clearColor){
 		if(!isReady())
 			return false;
+		capturedCurrentFrame = false;
 		try{
 			sceneBuffer.begin();
 			Color color = clearColor == null ? Color.BLACK : clearColor;
@@ -87,10 +89,11 @@ public final class WaterRefractionRenderer {
 			return;
 		captureActive = false;
 		sceneBuffer.end();
+		capturedCurrentFrame = true;
 	}
 
 	public boolean beginWaterPass(PolygonSpriteBatch batch, float waveStrength){
-		if(!isReady())
+		if(!isReady() || !capturedCurrentFrame)
 			return false;
 		sceneBuffer.getColorBufferTexture().bind(1);
 		Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);

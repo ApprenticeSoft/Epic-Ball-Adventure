@@ -15,11 +15,12 @@ uniform float u_tintStrength;
 uniform float u_waveStrength;
 
 void main(){
-	vec2 screenUv = vec2(gl_FragCoord.x / u_resolution.x, 1.0 - gl_FragCoord.y / u_resolution.y);
+	vec2 screenUv = vec2(gl_FragCoord.x / u_resolution.x, gl_FragCoord.y / u_resolution.y);
 	float localX = clamp(v_localCoord.x, 0.0, 1.0);
 	float localY = clamp(v_localCoord.y, 0.0, 1.0);
 	float depth = clamp(1.0 - localY, 0.0, 1.0);
-	float surfaceBend = 1.0 - smoothstep(0.05, 0.88, depth);
+	float surfaceGuard = smoothstep(0.015, 0.12, depth);
+	float surfaceBend = (1.0 - smoothstep(0.05, 0.88, depth)) * surfaceGuard;
 	float deepBend = smoothstep(0.0, 0.42, depth);
 	float waveStrength = clamp(u_waveStrength, 0.0, 1.0);
 
@@ -30,18 +31,23 @@ void main(){
 	float waveMix = surfaceWave * 0.46 + impactWave * 0.34 * waveStrength + crossWave * 0.16 + shimmer * 0.04;
 	float distortionPixels = u_calmDistortionPixels + u_waveDistortionPixels * waveStrength;
 
+	float distortionMask = 0.32 + surfaceBend * u_surfaceRippleStrength + deepBend * 0.18;
+	float verticalWave = crossWave * 0.48 + shimmer * 0.36 + surfaceWave * 0.22 * waveStrength;
 	vec2 offsetPixels = vec2(
-		waveMix * distortionPixels,
-		(crossWave * 0.55 + shimmer * 0.45 + surfaceWave * 0.25 * waveStrength) * distortionPixels * 0.36
-	) * (0.28 + surfaceBend * u_surfaceRippleStrength + deepBend * 0.22);
+		waveMix * distortionPixels * distortionMask,
+		-abs(verticalWave) * distortionPixels * (0.10 + surfaceBend * 0.24 + deepBend * 0.16)
+	);
 
-	vec4 refracted = texture2D(u_sceneTexture, clamp(screenUv + offsetPixels / u_resolution, 0.001, 0.999));
-	float tint = clamp(u_tintStrength + v_color.a * 0.32, 0.0, 0.82);
+	vec2 sampleUv = screenUv + offsetPixels / u_resolution;
+	sampleUv.x = clamp(sampleUv.x, 0.001, 0.999);
+	sampleUv.y = clamp(sampleUv.y, 0.001, max(screenUv.y, 0.001));
+	vec4 refracted = texture2D(u_sceneTexture, sampleUv);
+	float tint = clamp(u_tintStrength + v_color.a * 0.18, 0.0, 0.58);
 	vec3 color = mix(refracted.rgb, v_color.rgb, tint);
 	float caustic = (sin(localX * 95.0 + localY * 28.0 - u_time * 2.4) * 0.5 + 0.5)
 		* (0.06 + waveStrength * 0.1) * surfaceBend;
 	color += vec3(0.04, 0.07, 0.08) * surfaceBend * v_color.a;
 	color += vec3(0.06, 0.09, 0.08) * caustic;
 
-	gl_FragColor = vec4(color, 1.0);
+	gl_FragColor = vec4(color, clamp(v_color.a, 0.0, 1.0));
 }
