@@ -24,12 +24,13 @@ public class WaterSplashSystem {
 	private static final float AIRBORNE_SAFETY_MARGIN = 18f;
 	private static final float RIPPLE_BOUNCE_ALPHA = 0.45f;
 	private static final float SURFACE_SAMPLE_SPACING = 0.18f;
+	private static final float WATER_SURFACE_COLLISION_SAMPLE_SPACING = 0.06f;
 	private static final float SURFACE_STIFFNESS = 15f;
-	private static final float SURFACE_DAMPING = 0.82f;
+	private static final float SURFACE_DAMPING = 0.58f;
 	private static final float SURFACE_SPREAD = 20f;
-	private static final float SURFACE_EDGE_REFLECTION_DAMPING = 0.72f;
-	private static final float SURFACE_SETTLE_THRESHOLD = 0.0035f;
-	private static final float SURFACE_MAX_DISPLACEMENT = 1.35f;
+	private static final float SURFACE_EDGE_REFLECTION_DAMPING = 0.82f;
+	private static final float SURFACE_SETTLE_THRESHOLD = 0.0018f;
+	private static final float SURFACE_MAX_DISPLACEMENT = 1.55f;
 	private static final float SURFACE_MAX_VELOCITY = 18f;
 
 	private final World world;
@@ -53,6 +54,14 @@ public class WaterSplashSystem {
 	private float waterHitLocalX;
 	private boolean rayHit;
 	private Eau waterHit;
+	private Eau sampledWater;
+	private final WaterSurfaceHit localWaterHit = new WaterSurfaceHit();
+	private final SurfaceSampler waterSurfaceSampler = new SurfaceSampler() {
+		@Override
+		public float surfaceLocalY(float localX) {
+			return WaterSplashSystem.this.surfaceLocalY(sampledWater, localX);
+		}
+	};
 
 	private final RayCastCallback hardSurfaceRayCast = new RayCastCallback() {
 		@Override
@@ -204,9 +213,11 @@ public class WaterSplashSystem {
 		previousPosition.set(particle.position);
 		particle.integrate(delta, VISUAL_GRAVITY);
 
-		boolean canHit = particle.age > 0.04f && previousPosition.dst2(particle.position) > MIN_RAY_DISTANCE2;
-		boolean hardSurfaceHit = canHit && findHardSurfaceHit(previousPosition, particle.position);
-		boolean waterSurfaceHit = canHit && findWaterSurfaceHit(previousPosition, particle.position);
+		boolean movedEnough = previousPosition.dst2(particle.position) > MIN_RAY_DISTANCE2;
+		boolean waterSurfaceHit = movedEnough && findWaterSurfaceHit(previousPosition, particle.position,
+				particle.radius);
+		boolean canHitHardSurface = particle.age > 0.04f && movedEnough;
+		boolean hardSurfaceHit = canHitHardSurface && findHardSurfaceHit(previousPosition, particle.position);
 
 		if(waterSurfaceHit && (!hardSurfaceHit || waterHitFraction <= rayHitFraction)){
 			surfacePoint(waterHit, waterHitLocalX, mergeSurfacePoint);
@@ -228,39 +239,21 @@ public class WaterSplashSystem {
 		return rayHit;
 	}
 
-	private boolean findWaterSurfaceHit(Vector2 from, Vector2 to){
+	private boolean findWaterSurfaceHit(Vector2 from, Vector2 to, float radius){
 		waterHit = null;
 		waterHitFraction = 1f;
 		for(Eau water : waters){
 			Vector2 localFrom = water.getLocalPointCopy(from);
 			Vector2 localTo = water.getLocalPointCopy(to);
-			float previousFraction = 0f;
-			float previousX = localFrom.x;
-			float previousDistance = localFrom.y - surfaceLocalY(water, previousX);
-			int steps = MathUtils.clamp(MathUtils.ceil(localFrom.dst(localTo) / 0.16f), 4, 16);
-			for(int step = 1; step <= steps; step++){
-				float fraction = step / (float)steps;
-				float localX = MathUtils.lerp(localFrom.x, localTo.x, fraction);
-				float localY = MathUtils.lerp(localFrom.y, localTo.y, fraction);
-				float distance = localY - surfaceLocalY(water, localX);
-				if(previousDistance >= 0f && distance <= 0f){
-					float denominator = previousDistance - distance;
-					float localFraction = denominator <= 0.0001f ? 0f : previousDistance / denominator;
-					float hitFraction = MathUtils.lerp(previousFraction, fraction,
-							MathUtils.clamp(localFraction, 0f, 1f));
-					float hitLocalX = MathUtils.lerp(previousX, localX, MathUtils.clamp(localFraction, 0f, 1f));
-					if(water.containsSurfaceLocalX(hitLocalX) && hitFraction < waterHitFraction){
-						waterHit = water;
-						waterHitFraction = hitFraction;
-						waterHitLocalX = hitLocalX;
-					}
-					break;
-				}
-				previousFraction = fraction;
-				previousX = localX;
-				previousDistance = distance;
+			sampledWater = water;
+			if(findWaterSurfaceHitLocal(localFrom, localTo, radius, water.getSurfaceHalfWidth(), waterSurfaceSampler,
+					localWaterHit) && localWaterHit.fraction < waterHitFraction){
+				waterHit = water;
+				waterHitFraction = localWaterHit.fraction;
+				waterHitLocalX = localWaterHit.localX;
 			}
 		}
+		sampledWater = null;
 		return waterHit != null;
 	}
 
@@ -464,8 +457,68 @@ public class WaterSplashSystem {
 		float safeMass = Math.max(0.02f, mass);
 		float safeSize = Math.max(0.1f, size);
 		float safeIntensity = Math.max(0f, intensity);
-		return MathUtils.clamp(speed * 0.045f + (float)Math.sqrt(safeMass) * 0.16f
-				+ safeSize * 0.11f + safeIntensity * 0.045f, 0.14f, 1.25f);
+		return MathUtils.clamp(speed * 0.052f + (float)Math.sqrt(safeMass) * 0.185f
+				+ safeSize * 0.13f + safeIntensity * 0.052f, 0.16f, 1.45f);
+	}
+
+	static boolean findWaterSurfaceHitLocal(Vector2 localFrom, Vector2 localTo, float radius, float halfWidth,
+			SurfaceSampler surfaceSampler, WaterSurfaceHit out){
+		out.clear();
+		if(surfaceSampler == null || localTo.y > localFrom.y)
+			return false;
+
+		float safeHalfWidth = Math.max(0f, halfWidth);
+		float safeRadius = Math.max(0f, radius);
+		float previousFraction = 0f;
+		float previousX = localFrom.x;
+		float previousDistance = surfaceContactDistance(localFrom.y, surfaceSampler.surfaceLocalY(previousX),
+				safeRadius);
+		float initialDistance = previousDistance;
+		int steps = waterSurfaceCollisionSteps(localFrom.dst(localTo));
+		for(int step = 1; step <= steps; step++){
+			float fraction = step / (float)steps;
+			float localX = MathUtils.lerp(localFrom.x, localTo.x, fraction);
+			float localY = MathUtils.lerp(localFrom.y, localTo.y, fraction);
+			float distance = surfaceContactDistance(localY, surfaceSampler.surfaceLocalY(localX), safeRadius);
+			if(previousDistance >= 0f && distance <= 0f){
+				float denominator = previousDistance - distance;
+				float localFraction = denominator <= 0.0001f ? 0f : previousDistance / denominator;
+				localFraction = MathUtils.clamp(localFraction, 0f, 1f);
+				float hitFraction = MathUtils.lerp(previousFraction, fraction, localFraction);
+				float hitLocalX = MathUtils.lerp(previousX, localX, localFraction);
+				if(containsSurfaceLocalX(hitLocalX, safeHalfWidth)){
+					out.set(hitFraction, hitLocalX);
+					return true;
+				}
+			}
+			previousFraction = fraction;
+			previousX = localX;
+			previousDistance = distance;
+		}
+
+		float finalDistance = previousDistance;
+		if(initialDistance <= 0f && containsSurfaceLocalX(localFrom.x, safeHalfWidth)){
+			out.set(0f, localFrom.x);
+			return true;
+		}
+		if(finalDistance <= 0f && containsSurfaceLocalX(localTo.x, safeHalfWidth)){
+			out.set(1f, localTo.x);
+			return true;
+		}
+		return false;
+	}
+
+	static int waterSurfaceCollisionSteps(float localDistance){
+		return MathUtils.clamp(MathUtils.ceil(Math.max(0f, localDistance)
+				/ WATER_SURFACE_COLLISION_SAMPLE_SPACING), 8, 96);
+	}
+
+	private static float surfaceContactDistance(float localY, float surfaceY, float radius){
+		return localY - (surfaceY + radius);
+	}
+
+	private static boolean containsSurfaceLocalX(float localX, float halfWidth){
+		return localX >= -halfWidth && localX <= halfWidth;
 	}
 
 	private float cappedRenderAlpha(SplashParticle particle, Color waterColor){
@@ -501,6 +554,25 @@ public class WaterSplashSystem {
 			this.start = start;
 			this.end = end;
 			this.alphaScale = alphaScale;
+		}
+	}
+
+	interface SurfaceSampler {
+		float surfaceLocalY(float localX);
+	}
+
+	static final class WaterSurfaceHit {
+		float fraction;
+		float localX;
+
+		void set(float fraction, float localX){
+			this.fraction = fraction;
+			this.localX = localX;
+		}
+
+		void clear(){
+			fraction = 1f;
+			localX = 0f;
 		}
 	}
 

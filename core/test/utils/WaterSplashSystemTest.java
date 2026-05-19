@@ -126,7 +126,59 @@ public class WaterSplashSystemTest {
 	public void ballImpactCreatesVisibleWaveAmplitude(){
 		float intensity = WaterImpact.calculateIntensity(8f, 8f, 0.05f, 1.6f);
 
-		assertTrue(WaterSplashSystem.calculateWaveAmplitude(8f, 0.05f, 1.6f, intensity) > 0.65f);
+		assertTrue(WaterSplashSystem.calculateWaveAmplitude(8f, 0.05f, 1.6f, intensity) > 0.75f);
+	}
+
+	@Test
+	public void waterSurfaceCollisionUsesDropletRadius(){
+		WaterSplashSystem.WaterSurfaceHit hit = new WaterSplashSystem.WaterSurfaceHit();
+
+		boolean collided = WaterSplashSystem.findWaterSurfaceHitLocal(new Vector2(0f, 1.2f),
+				new Vector2(0f, 1.05f), 0.1f, 2f, localX -> 1f, hit);
+
+		assertTrue(collided);
+		assertEquals(0.6667f, hit.fraction, 0.001f);
+		assertEquals(0f, hit.localX, 0.0001f);
+	}
+
+	@Test
+	public void fastDropletCrossesWaterSurfaceBeforePoolBottom(){
+		WaterSplashSystem.WaterSurfaceHit hit = new WaterSplashSystem.WaterSurfaceHit();
+
+		boolean collided = WaterSplashSystem.findWaterSurfaceHitLocal(new Vector2(0f, 4f),
+				new Vector2(0f, -2f), 0.08f, 2f, localX -> 1f, hit);
+
+		assertTrue(collided);
+		assertTrue(hit.fraction < 0.5f);
+		assertEquals(0f, hit.localX, 0.0001f);
+	}
+
+	@Test
+	public void submergedDescendingDropletMergesAtWaterSurface(){
+		WaterSplashSystem.WaterSurfaceHit hit = new WaterSplashSystem.WaterSurfaceHit();
+
+		boolean collided = WaterSplashSystem.findWaterSurfaceHitLocal(new Vector2(0f, 1.05f),
+				new Vector2(0f, 0.5f), 0.1f, 2f, localX -> 1f, hit);
+
+		assertTrue(collided);
+		assertEquals(0f, hit.fraction, 0.0001f);
+		assertEquals(0f, hit.localX, 0.0001f);
+	}
+
+	@Test
+	public void overlappingDropletMovingAwayFromWaterDoesNotMergeImmediately(){
+		WaterSplashSystem.WaterSurfaceHit hit = new WaterSplashSystem.WaterSurfaceHit();
+
+		boolean collided = WaterSplashSystem.findWaterSurfaceHitLocal(new Vector2(0f, 1.05f),
+				new Vector2(0f, 1.2f), 0.1f, 2f, localX -> 1f, hit);
+
+		assertFalse(collided);
+	}
+
+	@Test
+	public void waterSurfaceCollisionUsesFineAdaptiveSampling(){
+		assertEquals(8, WaterSplashSystem.waterSurfaceCollisionSteps(0.01f));
+		assertEquals(96, WaterSplashSystem.waterSurfaceCollisionSteps(12f));
 	}
 
 	private WaterSplashSystem.RippleSegment[] rippleSegments(){
@@ -213,8 +265,20 @@ public class WaterSplashSystemTest {
 				latePeak = Math.max(latePeak, simulation.maxAbsDisplacement());
 		}
 
-		assertTrue(signChanges >= 2);
+		assertTrue(signChanges >= 3);
 		assertTrue(latePeak < initialPeak);
+	}
+
+	@Test
+	public void surfaceSimulationStaysVisibleWhileEquilibrating(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.45f, 0.8f, 0.5f);
+		for(int i = 0; i < 360; i++)
+			simulation.update(1f / 60f);
+
+		assertTrue(simulation.hasMotion());
 	}
 
 	@Test
