@@ -202,6 +202,55 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void surfaceImpactSpawnsTravelingWavesBothDirections(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
+
+		assertTrue(simulation.travelingWaveCount() >= 4);
+		assertTrue(simulation.hasTravelingWaveDirection(-1));
+		assertTrue(simulation.hasTravelingWaveDirection(1));
+	}
+
+	@Test
+	public void travelingWavePacketsMoveAwayFromImpact(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
+		float initialRightCenter = firstWaveCenter(simulation, 1);
+		for(int i = 0; i < 30; i++)
+			simulation.update(1f / 60f);
+
+		assertTrue(firstWaveCenter(simulation, 1) > initialRightCenter);
+	}
+
+	@Test
+	public void travelingWaveReflectsAtWaterBoundary(){
+		WaterSplashSystem.TravelingWave wave =
+				new WaterSplashSystem.TravelingWave(1.95f, 1, 0.5f, 0.5f, 2.5f, 1.5f, -1.5708f);
+
+		wave.update(0.5f, 2f);
+
+		assertEquals(-1, wave.direction);
+		assertTrue(wave.centerX <= 2f);
+		assertTrue(wave.centerX >= -2f);
+		assertEquals(1, wave.bounceCount);
+		assertTrue(wave.amplitude < 0.5f);
+	}
+
+	@Test
+	public void surfaceSimulationShowsMultipleCrestsAndTroughsAfterImpact(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
+
+		assertTrue(countSurfaceSignChanges(simulation, 0.015f) >= 4);
+	}
+
+	@Test
 	public void surfaceSimulationImpactCreatesVisibleMeshDisplacement(){
 		WaterSplashSystem.WaterSurfaceSimulation simulation =
 				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
@@ -216,15 +265,17 @@ public class WaterSplashSystemTest {
 	public void surfaceSimulationPropagatesToNeighboringSamples(){
 		WaterSplashSystem.WaterSurfaceSimulation simulation =
 				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
-		int center = simulation.nearestSample(0f);
-		int neighbor = center + 3;
+		float targetX = simulation.localX(simulation.nearestSample(1.75f));
 
 		simulation.applyImpact(0f, 0.25f, 0.25f, 0.4f);
-		float initialNeighbor = Math.abs(simulation.displacement(neighbor));
-		for(int i = 0; i < 12; i++)
+		float initialTarget = Math.abs(simulation.displacementAt(targetX));
+		float peakTarget = initialTarget;
+		for(int i = 0; i < 60; i++){
 			simulation.update(1f / 60f);
+			peakTarget = Math.max(peakTarget, Math.abs(simulation.displacementAt(targetX)));
+		}
 
-		assertTrue(Math.abs(simulation.displacement(neighbor)) > initialNeighbor);
+		assertTrue(peakTarget > initialTarget + 0.025f);
 	}
 
 	@Test
@@ -292,6 +343,18 @@ public class WaterSplashSystemTest {
 
 		assertFalse(simulation.hasMotion());
 		assertEquals(0f, simulation.maxAbsDisplacement(), 0.0001f);
+	}
+
+	@Test
+	public void travelingWavesEventuallyExpire(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
+		for(int i = 0; i < 1200; i++)
+			simulation.update(1f / 60f);
+
+		assertEquals(0, simulation.travelingWaveCount());
 	}
 
 	@Test
@@ -365,5 +428,27 @@ public class WaterSplashSystemTest {
 
 		for(int i = 5; i < count; i += 2)
 			assertTrue(vertices[i] >= 0.35f);
+	}
+
+	private float firstWaveCenter(WaterSplashSystem.WaterSurfaceSimulation simulation, int direction){
+		for(WaterSplashSystem.TravelingWave wave : simulation.travelingWaves)
+			if(wave.direction == direction)
+				return wave.centerX;
+		return 0f;
+	}
+
+	private int countSurfaceSignChanges(WaterSplashSystem.WaterSurfaceSimulation simulation, float threshold){
+		int previousSign = 0;
+		int signChanges = 0;
+		for(int i = 0; i < simulation.sampleCount; i++){
+			float displacement = simulation.displacement(i);
+			if(Math.abs(displacement) <= threshold)
+				continue;
+			int sign = displacement > 0f ? 1 : -1;
+			if(previousSign != 0 && sign != previousSign)
+				signChanges++;
+			previousSign = sign;
+		}
+		return signChanges;
 	}
 }

@@ -32,6 +32,14 @@ public class WaterSplashSystem {
 	private static final float SURFACE_SETTLE_THRESHOLD = 0.0018f;
 	private static final float SURFACE_MAX_DISPLACEMENT = 1.55f;
 	private static final float SURFACE_MAX_VELOCITY = 18f;
+	private static final int MAX_TRAVELING_WAVES = 24;
+	private static final int TRAVELING_WAVE_MAX_BOUNCES = 8;
+	private static final float TRAVELING_WAVE_BASE_SPEED = 1.65f;
+	private static final float TRAVELING_WAVE_SPEED_SCALE = 0.9f;
+	private static final float TRAVELING_WAVE_BOUNCE_DAMPING = 0.72f;
+	private static final float TRAVELING_WAVE_DAMPING_PER_SECOND = 0.9f;
+	private static final float TRAVELING_WAVE_MIN_AMPLITUDE = 0.012f;
+	private static final float TRAVELING_WAVE_MAX_AGE = 14f;
 
 	private final World world;
 	private final Array<Eau> waters;
@@ -585,6 +593,7 @@ public class WaterSplashSystem {
 		final float[] velocities;
 		final float[] leftDeltas;
 		final float[] rightDeltas;
+		final Array<TravelingWave> travelingWaves = new Array<TravelingWave>();
 		float alpha;
 		float energy;
 
@@ -602,6 +611,7 @@ public class WaterSplashSystem {
 		void applyImpact(float localX, float amplitude, float size, float alpha){
 			this.alpha = Math.max(this.alpha, alpha);
 			energy = Math.max(energy, amplitude);
+			spawnTravelingWaves(localX, amplitude, size);
 			int center = nearestSample(localX);
 			float radius = Math.max(sampleSpacing * 2.5f, size * 0.8f);
 			int sampleRadius = Math.max(1, MathUtils.ceil(radius / sampleSpacing));
@@ -611,8 +621,8 @@ public class WaterSplashSystem {
 					continue;
 				float falloff = 1f - Math.abs(offset) / (float)(sampleRadius + 1);
 				falloff *= falloff;
-				displacements[index] -= amplitude * 0.76f * falloff;
-				velocities[index] -= amplitude * 18f * falloff;
+				displacements[index] -= amplitude * 0.28f * falloff;
+				velocities[index] -= amplitude * 7f * falloff;
 			}
 			int shoulderRadius = sampleRadius + Math.max(2, MathUtils.ceil(sampleRadius * 0.45f));
 			for(int offset = -shoulderRadius; offset <= shoulderRadius; offset++){
@@ -624,8 +634,8 @@ public class WaterSplashSystem {
 					continue;
 				float falloff = 1f - (distance - sampleRadius) / (float)(shoulderRadius - sampleRadius + 1);
 				falloff *= falloff;
-				displacements[index] += amplitude * 0.24f * falloff;
-				velocities[index] += amplitude * 5f * falloff;
+				displacements[index] += amplitude * 0.08f * falloff;
+				velocities[index] += amplitude * 2f * falloff;
 			}
 			clampMotion();
 		}
@@ -634,6 +644,7 @@ public class WaterSplashSystem {
 			if(!hasMotion())
 				return;
 			float clampedDelta = Math.min(delta, 1f / 30f);
+			updateTravelingWaves(clampedDelta);
 			for(int i = 0; i < sampleCount; i++){
 				float acceleration = -SURFACE_STIFFNESS * displacements[i] - SURFACE_DAMPING * velocities[i];
 				velocities[i] += acceleration * clampedDelta;
@@ -666,9 +677,11 @@ public class WaterSplashSystem {
 				velocities[i] = MathUtils.clamp(velocities[i], -SURFACE_MAX_VELOCITY, SURFACE_MAX_VELOCITY);
 				maxEnergy = Math.max(maxEnergy, Math.abs(displacements[i]) + Math.abs(velocities[i]) * 0.035f);
 			}
+			for(TravelingWave wave : travelingWaves)
+				maxEnergy = Math.max(maxEnergy, wave.energy());
 			energy = maxEnergy;
 			alpha *= 0.992f;
-			if(energy < SURFACE_SETTLE_THRESHOLD){
+			if(energy < SURFACE_SETTLE_THRESHOLD && travelingWaves.size == 0){
 				for(int i = 0; i < sampleCount; i++){
 					displacements[i] = 0f;
 					velocities[i] = 0f;
@@ -679,7 +692,7 @@ public class WaterSplashSystem {
 		}
 
 		boolean hasMotion(){
-			return energy > SURFACE_SETTLE_THRESHOLD || alpha > 0.01f;
+			return energy > SURFACE_SETTLE_THRESHOLD || alpha > 0.01f || travelingWaves.size > 0;
 		}
 
 		float localX(int index){
@@ -687,10 +700,14 @@ public class WaterSplashSystem {
 		}
 
 		float displacement(int index){
-			return displacements[index];
+			return combinedDisplacementAt(localX(index));
 		}
 
 		float displacementAt(float localX){
+			return combinedDisplacementAt(localX);
+		}
+
+		float springDisplacementAt(float localX){
 			float normalized = (MathUtils.clamp(localX, -halfWidth, halfWidth) + halfWidth) / (halfWidth * 2f);
 			float scaledIndex = normalized * (sampleCount - 1);
 			int leftIndex = MathUtils.clamp(MathUtils.floor(scaledIndex), 0, sampleCount - 1);
@@ -700,11 +717,69 @@ public class WaterSplashSystem {
 			return MathUtils.lerp(displacements[leftIndex], displacements[rightIndex], scaledIndex - leftIndex);
 		}
 
+		float travelingWaveDisplacementAt(float localX){
+			float displacement = 0f;
+			for(TravelingWave wave : travelingWaves)
+				displacement += wave.displacementAt(localX);
+			return displacement;
+		}
+
+		float combinedDisplacementAt(float localX){
+			return MathUtils.clamp(springDisplacementAt(localX) + travelingWaveDisplacementAt(localX),
+					-SURFACE_MAX_DISPLACEMENT, SURFACE_MAX_DISPLACEMENT);
+		}
+
 		float maxAbsDisplacement(){
 			float max = 0f;
 			for(int i = 0; i < sampleCount; i++)
-				max = Math.max(max, Math.abs(displacements[i]));
+				max = Math.max(max, Math.abs(displacement(i)));
 			return max;
+		}
+
+		int travelingWaveCount(){
+			return travelingWaves.size;
+		}
+
+		boolean hasTravelingWaveDirection(int direction){
+			for(TravelingWave wave : travelingWaves)
+				if(wave.direction == direction)
+					return true;
+			return false;
+		}
+
+		private void spawnTravelingWaves(float localX, float amplitude, float size){
+			int pairCount = MathUtils.clamp(MathUtils.round(1.45f + amplitude * 1.15f + size * 0.15f), 2, 4);
+			float startX = MathUtils.clamp(localX, -halfWidth, halfWidth);
+			for(int pair = 0; pair < pairCount; pair++){
+				float pairScale = Math.max(0.45f, 1f - pair * 0.18f);
+				float waveAmplitude = amplitude * (0.16f - pair * 0.022f) * pairScale;
+				float wavelength = MathUtils.clamp(0.36f + size * 0.22f + amplitude * 0.12f + pair * 0.16f,
+						sampleSpacing * 3.5f, halfWidth * 0.9f);
+				float width = MathUtils.clamp(wavelength * (3f + pair * 0.35f) + size * 0.18f,
+						wavelength * 2.4f, halfWidth * 2f);
+				float speed = TRAVELING_WAVE_BASE_SPEED + amplitude * TRAVELING_WAVE_SPEED_SCALE + pair * 0.18f;
+				float phase = -MathUtils.PI * 0.5f + pair * 0.32f;
+				float offset = sampleSpacing * (pair + 1) * 0.35f;
+				addTravelingWave(new TravelingWave(MathUtils.clamp(startX - offset, -halfWidth, halfWidth), -1,
+						waveAmplitude, wavelength, speed, width, phase));
+				addTravelingWave(new TravelingWave(MathUtils.clamp(startX + offset, -halfWidth, halfWidth), 1,
+						waveAmplitude, wavelength, speed, width, phase));
+			}
+		}
+
+		private void addTravelingWave(TravelingWave wave){
+			travelingWaves.add(wave);
+			while(travelingWaves.size > MAX_TRAVELING_WAVES)
+				travelingWaves.removeIndex(0);
+		}
+
+		private void updateTravelingWaves(float delta){
+			for(int i = travelingWaves.size - 1; i >= 0; i--){
+				TravelingWave wave = travelingWaves.get(i);
+				wave.update(delta, halfWidth);
+				if(wave.isExpired())
+					travelingWaves.removeIndex(i);
+			}
 		}
 
 		int nearestSample(float localX){
@@ -718,6 +793,66 @@ public class WaterSplashSystem {
 						SURFACE_MAX_DISPLACEMENT);
 				velocities[i] = MathUtils.clamp(velocities[i], -SURFACE_MAX_VELOCITY, SURFACE_MAX_VELOCITY);
 			}
+		}
+	}
+
+	static final class TravelingWave {
+		float centerX;
+		int direction;
+		float amplitude;
+		float wavelength;
+		float speed;
+		float width;
+		float phase;
+		float age;
+		int bounceCount;
+
+		TravelingWave(float centerX, int direction, float amplitude, float wavelength, float speed, float width,
+				float phase){
+			this.centerX = centerX;
+			this.direction = direction < 0 ? -1 : 1;
+			this.amplitude = Math.max(0f, amplitude);
+			this.wavelength = Math.max(0.05f, wavelength);
+			this.speed = Math.max(0f, speed);
+			this.width = Math.max(this.wavelength, width);
+			this.phase = phase;
+		}
+
+		void update(float delta, float halfWidth){
+			age += delta;
+			centerX += direction * speed * delta;
+			if(centerX < -halfWidth){
+				centerX = -halfWidth + (-halfWidth - centerX);
+				direction = 1;
+				amplitude *= TRAVELING_WAVE_BOUNCE_DAMPING;
+				bounceCount++;
+			}
+			else if(centerX > halfWidth){
+				centerX = halfWidth - (centerX - halfWidth);
+				direction = -1;
+				amplitude *= TRAVELING_WAVE_BOUNCE_DAMPING;
+				bounceCount++;
+			}
+			amplitude *= (float)Math.pow(TRAVELING_WAVE_DAMPING_PER_SECOND, delta);
+		}
+
+		float displacementAt(float localX){
+			float distance = localX - centerX;
+			float normalizedDistance = Math.abs(distance) / width;
+			if(normalizedDistance >= 1f)
+				return 0f;
+			float envelope = 1f - normalizedDistance * normalizedDistance;
+			envelope *= envelope;
+			return amplitude * MathUtils.sin(MathUtils.PI2 * distance / wavelength + phase) * envelope;
+		}
+
+		float energy(){
+			return Math.abs(amplitude);
+		}
+
+		boolean isExpired(){
+			return amplitude < TRAVELING_WAVE_MIN_AMPLITUDE || age > TRAVELING_WAVE_MAX_AGE
+					|| bounceCount > TRAVELING_WAVE_MAX_BOUNCES;
 		}
 	}
 
