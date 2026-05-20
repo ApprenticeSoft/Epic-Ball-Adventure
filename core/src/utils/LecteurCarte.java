@@ -55,9 +55,9 @@ public class LecteurCarte {
 		cameraOrigineX = camera2.position.x;
 		cameraOrigineY = camera2.position.y;
 
-		System.out.println("Position camera : " + cameraOrigineX + ", " + cameraOrigineY);
 		Variables.PPT =  Integer.parseInt(tiledMap.getProperties().get("tileheight").toString());
-		System.out.println("Variables.PPT = " + Variables.PPT);
+		DebugConfig.log("map loaded cameraOrigin=" + cameraOrigineX + "," + cameraOrigineY
+				+ " ppt=" + Variables.PPT);
 
 		balle = new Balle(world, camera, tiledMap);
 		objects = tiledMap.getLayers().get("Objects").getObjects();
@@ -99,7 +99,7 @@ public class LecteurCarte {
 	//Poulies
 	else if(rectangleObject.getProperties().get("type").equals("Poulie")){
 		poulies.add(rectangleObject);
-		System.out.println("poulies.size = " + poulies.size);
+		DebugConfig.log("pulley candidate count=" + poulies.size);
 	}
 	//Eau
 	else if(rectangleObject.getProperties().get("type").equals("Water")){
@@ -139,7 +139,7 @@ public class LecteurCarte {
 		}
 	}
 	else
-			System.out.println("TEST");
+			DebugConfig.log("pulley ignored: missing Groupe property");
         }
 
         //Création de polygones

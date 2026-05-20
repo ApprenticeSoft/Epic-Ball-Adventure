@@ -34,10 +34,9 @@ public class Polygone extends Obstacle{
 	@Override
 	public void create(World world, Camera camera, MapObject Object, Couleurs couleurs){
 		coordPoly = new float[((PolygonMapObject) Object).getPolygon().getTransformedVertices().length];
-    	for(int i = 0; i < ((PolygonMapObject) Object).getPolygon().getTransformedVertices().length; i++){
-    		coordPoly[i] = ((PolygonMapObject) Object).getPolygon().getTransformedVertices()[i]*Variables.WORLD_TO_BOX;
-    		//System.out.println("coordPoly[" + i + "] : " + coordPoly[i]);
-    	}
+		for(int i = 0; i < ((PolygonMapObject) Object).getPolygon().getTransformedVertices().length; i++){
+			coordPoly[i] = ((PolygonMapObject) Object).getPolygon().getTransformedVertices()[i]*Variables.WORLD_TO_BOX;
+		}
 
     	PolygonShape ps = new PolygonShape();
     	ps.set(coordPoly);
@@ -78,30 +77,13 @@ public class Polygone extends Obstacle{
         EarClippingTriangulator triangulator = new EarClippingTriangulator();
         ShortArray triangleIndices = triangulator.computeTriangles(coordPoly);
 
-        PolygonRegion polyReg = new PolygonRegion(textureRegion, coordPoly, triangleIndices.toArray());
-
-        polySprite = new PolygonSprite(polyReg);
-
-        //System.out.println("PolySprite X = "  + polySprite.getX());
-        //System.out.println("PolySprite Y = "  + polySprite.getY());
-        //System.out.println("PolySprite originX = "  + polySprite.getOriginX());
-        //System.out.println("PolySprite originY = "  + polySprite.getOriginY());
-        //System.out.println("***********************************************");
-        /***************************************/
+		PolygonRegion polyReg = new PolygonRegion(textureRegion, coordPoly, triangleIndices.toArray());
+		polySprite = new PolygonSprite(polyReg);
 	}
 
 	public void draw(PolygonSpriteBatch polyBatch, Couleurs couleurs){
 		setPos(polySprite.getX(), polySprite.getY());
-	    polySprite.draw(polyBatch);
-
-        //System.out.println("PolySprite X = "  + polySprite.getX());
-        //System.out.println("PolySprite Y = "  + polySprite.getY());
-        //System.out.println("PolySprite originX = "  + polySprite.getOriginX());
-        //System.out.println("PolySprite originY = "  + polySprite.getOriginY());
-
-        //System.out.println("body.getPosition().x = "  + body.getPosition().x);
-        //System.out.println("body.getPosition().y = "  + body.getPosition().y);
-        //System.out.println("***********************************************");
+		polySprite.draw(polyBatch);
 	}
 
 	public void drawOmbre(PolygonSpriteBatch polyBatch){

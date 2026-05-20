@@ -283,124 +283,130 @@ public class GameScreen extends InputAdapter implements Screen{
 		world.setContactListener(new ContactListener(){
 			@Override
 			public void beginContact(Contact contact) {
-				Fixture fixtureA = contact.getFixtureA();
-				Fixture fixtureB = contact.getFixtureB();
-
-				if(fixtureA.getUserData() != null && fixtureB.getUserData() != null) {
-				//Finish the level
-				if(fixtureA.getUserData().equals("Ball") && fixtureB.getUserData().equals("Exit")){
-					startLevelComplete();
-				}
-				else if(fixtureB.getUserData().equals("Ball") && fixtureA.getUserData().equals("Exit")){
-					startLevelComplete();
-				}
-
-				    //Spring
-				if((fixtureA.getUserData().equals("Ball") || fixtureA.getUserData().equals("Light")) && fixtureB.getUserData().equals("Spring")){
-					for(Obstacle spring : lecteurCarte.springs){
-						if(spring.body == fixtureB.getBody()){
-							spring.actif();
-							soundSpring.play();
-						}
-					}
-				}
-				else if((fixtureB.getUserData().equals("Ball") || fixtureB.getUserData().equals("Light")) && fixtureA.getUserData().equals("Spring")){
-					for(Obstacle spring : lecteurCarte.springs){
-						if(spring.body == fixtureA.getBody()){
-							spring.actif();
-							soundSpring.play();
-						}
-					}
-				}
-				}
-
-			    //EAU
-			    if ((fixtureA.getUserData() != null && fixtureA.getUserData().equals("Water")) && fixtureB.getBody().getType() == BodyType.DynamicBody) {
-				for(Obstacle obstacle : lecteurCarte.waters){
-					if(obstacle.body.getFixtureList().get(0) == fixtureA){
-						Eau eau = (Eau) obstacle;
-						eau.buoyancyController.addBody(fixtureB);
-						waterSplashSystem.enterWater(eau, fixtureB, contact);
-
-						if(fixtureB.getUserData().equals("Ball")){
-							System.out.println("Balle à l'eau !");
-							lecteurCarte.balle.restart = true;
-						}
-
-						soundWater.play();
-					}
-				}
-				}
-			    else if ((fixtureB.getUserData() != null && fixtureB.getUserData().equals("Water")) && fixtureA.getBody().getType() == BodyType.DynamicBody) {
-					for(Obstacle obstacle : lecteurCarte.waters){
-					if(obstacle.body.getFixtureList().get(0) == fixtureB){
-						Eau eau = (Eau) obstacle;
-						eau.buoyancyController.addBody(fixtureA);
-						waterSplashSystem.enterWater(eau, fixtureA, contact);
-
-						if(fixtureA.getUserData().equals("Ball")){
-							System.out.println("Balle à l'eau !");
-							lecteurCarte.balle.restart = true;
-						}
-
-						soundWater.play();
-					}
-				}
-				}
-
+				handleBeginContact(contact);
 			}
 
 			@Override
 			public void endContact(Contact contact) {
-				Fixture FixtureA = contact.getFixtureA();
-				Fixture FixtureB = contact.getFixtureB();
-
-			    //EAU
-			    if ((FixtureA.getUserData() != null && FixtureA.getUserData().equals("Water")) && FixtureB.getBody().getType() == BodyType.DynamicBody) {
-				for(Obstacle obstacle : lecteurCarte.waters){
-					if(obstacle.body.getFixtureList().get(0) == FixtureA){
-						Eau eau = (Eau) obstacle;
-						eau.buoyancyController.removeBody(FixtureB);
-						waterSplashSystem.exitWater(eau, FixtureB);
-					}
-				}
-				}
-			    else if ((FixtureB.getUserData() != null && FixtureB.getUserData().equals("Water")) && FixtureA.getBody().getType() == BodyType.DynamicBody) {
-					for(Obstacle obstacle : lecteurCarte.waters){
-					if(obstacle.body.getFixtureList().get(0) == FixtureB){
-						Eau eau = (Eau) obstacle;
-						eau.buoyancyController.removeBody(FixtureA);
-						waterSplashSystem.exitWater(eau, FixtureA);
-					}
-				}
-				}
+				handleEndContact(contact);
 			}
 
 			@Override
 			public void preSolve(Contact contact, Manifold oldManifold) {
-				Body a = contact.getFixtureA().getBody();
-			    Body b = contact.getFixtureB().getBody();
-
-			    if((a.getUserData() != null && a.getUserData().equals("Objet")) && (b.getUserData() != null && b.getUserData().equals("Objet"))) {
-				contact.setEnabled(false);
-				}
+				if(isObjectBody(contact.getFixtureA().getBody()) && isObjectBody(contact.getFixtureB().getBody()))
+					contact.setEnabled(false);
 			}
 
 			@Override
 			public void postSolve(Contact contact, ContactImpulse impulse) {
-				Body bodyA = contact.getFixtureA().getBody();
-			    Body bodyB = contact.getFixtureB().getBody();
-
-				//Chock sound
-			for(int i = 0; i < impulse.getNormalImpulses().length; i++){
-				if(impulse.getNormalImpulses()[i] > 1){
-					System.out.println("Impulse = " + impulse.getNormalImpulses()[i]);
-					soundChock.play();
-				}
-			}
-
+				handlePostSolve(impulse);
 			}
 		});
+	}
+
+	private void handleBeginContact(Contact contact){
+		Fixture fixtureA = contact.getFixtureA();
+		Fixture fixtureB = contact.getFixtureB();
+		handleExitContact(fixtureA, fixtureB);
+		handleSpringContact(fixtureA, fixtureB);
+		handleWaterEnterContact(contact, fixtureA, fixtureB);
+	}
+
+	private void handleExitContact(Fixture fixtureA, Fixture fixtureB){
+		if((isFixtureUserData(fixtureA, "Ball") && isFixtureUserData(fixtureB, "Exit"))
+				|| (isFixtureUserData(fixtureB, "Ball") && isFixtureUserData(fixtureA, "Exit")))
+			startLevelComplete();
+	}
+
+	private void handleSpringContact(Fixture fixtureA, Fixture fixtureB){
+		if(isSpringActivator(fixtureA) && isFixtureUserData(fixtureB, "Spring")){
+			activateSpring(fixtureB);
+			return;
+		}
+		if(isSpringActivator(fixtureB) && isFixtureUserData(fixtureA, "Spring"))
+			activateSpring(fixtureA);
+	}
+
+	private void activateSpring(Fixture springFixture){
+		for(Obstacle spring : lecteurCarte.springs){
+			if(spring.body == springFixture.getBody()){
+				spring.actif();
+				soundSpring.play();
+				return;
+			}
+		}
+	}
+
+	private void handleWaterEnterContact(Contact contact, Fixture fixtureA, Fixture fixtureB){
+		if(isFixtureUserData(fixtureA, "Water") && isDynamicFixture(fixtureB)){
+			enterWater(waterForFixture(fixtureA), fixtureB, contact);
+			return;
+		}
+		if(isFixtureUserData(fixtureB, "Water") && isDynamicFixture(fixtureA))
+			enterWater(waterForFixture(fixtureB), fixtureA, contact);
+	}
+
+	private void enterWater(Eau water, Fixture fixture, Contact contact){
+		if(water == null)
+			return;
+		water.buoyancyController.addBody(fixture);
+		waterSplashSystem.enterWater(water, fixture, contact);
+		if(isFixtureUserData(fixture, "Ball")){
+			DebugConfig.log("ball entered water");
+			lecteurCarte.balle.restart = true;
+		}
+		soundWater.play();
+	}
+
+	private void handleEndContact(Contact contact){
+		Fixture fixtureA = contact.getFixtureA();
+		Fixture fixtureB = contact.getFixtureB();
+		if(isFixtureUserData(fixtureA, "Water") && isDynamicFixture(fixtureB)){
+			exitWater(waterForFixture(fixtureA), fixtureB);
+			return;
+		}
+		if(isFixtureUserData(fixtureB, "Water") && isDynamicFixture(fixtureA))
+			exitWater(waterForFixture(fixtureB), fixtureA);
+	}
+
+	private void exitWater(Eau water, Fixture fixture){
+		if(water == null)
+			return;
+		water.buoyancyController.removeBody(fixture);
+		waterSplashSystem.exitWater(water, fixture);
+	}
+
+	private Eau waterForFixture(Fixture waterFixture){
+		for(Eau water : lecteurCarte.waters)
+			if(water.body.getFixtureList().get(0) == waterFixture)
+				return water;
+		return null;
+	}
+
+	private void handlePostSolve(ContactImpulse impulse){
+		for(int i = 0; i < impulse.getNormalImpulses().length; i++){
+			float normalImpulse = impulse.getNormalImpulses()[i];
+			if(normalImpulse > 1f){
+				DebugConfig.log("contact impulse=" + normalImpulse);
+				soundChock.play();
+			}
+		}
+	}
+
+	private boolean isSpringActivator(Fixture fixture){
+		return isFixtureUserData(fixture, "Ball") || isFixtureUserData(fixture, "Light");
+	}
+
+	private boolean isDynamicFixture(Fixture fixture){
+		return fixture != null && fixture.getBody() != null && fixture.getBody().getType() == BodyType.DynamicBody;
+	}
+
+	private boolean isObjectBody(Body body){
+		return body != null && "Objet".equals(body.getUserData());
+	}
+
+	private boolean isFixtureUserData(Fixture fixture, String expected){
+		return fixture != null && expected.equals(fixture.getUserData());
 	}
 
 	@Override
@@ -430,20 +436,14 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void pause() {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
 	public void resume() {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
 	public void hide() {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override

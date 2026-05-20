@@ -11,6 +11,7 @@ import com.badlogic.gdx.physics.box2d.BodyDef.BodyType;
 import com.badlogic.gdx.physics.box2d.joints.RevoluteJoint;
 import com.badlogic.gdx.physics.box2d.joints.RevoluteJointDef;
 import com.one.button.jam.Couleurs;
+import utils.DebugConfig;
 
 public class ObstacleBalance extends Obstacle{
 
@@ -115,11 +116,10 @@ public class ObstacleBalance extends Obstacle{
 		revoluteJoint = (RevoluteJoint) world.createJoint(rjDef);
 		attacheShape.dispose();
 
-		System.out.println("bodyAttache.getPosition() = " + bodyAttache.getPosition().toString());
-		System.out.println("body.getPosition() = " + body.getPosition().toString());
-
-		System.out.println("torque = " + torque);
-		System.out.println("speed = " + speed);
+		DebugConfig.log("swing created body=" + body.getPosition()
+				+ " anchor=" + bodyAttache.getPosition()
+				+ " torque=" + torque
+				+ " speed=" + speed);
 	}
 
 	@Override
