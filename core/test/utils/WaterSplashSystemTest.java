@@ -180,7 +180,7 @@ public class WaterSplashSystemTest {
 		float slowHugeRate = WaterSplashSystem.calculateBubbleTrailRate(0.6f, 100f, 20f);
 		float fastSmallRate = WaterSplashSystem.calculateBubbleTrailRate(8f, 0.02f, 0.1f);
 
-		assertTrue(fastSmallRate > slowHugeRate * 10f);
+		assertTrue(fastSmallRate > slowHugeRate * 50f);
 	}
 
 	@Test
@@ -189,9 +189,12 @@ public class WaterSplashSystemTest {
 		float slowMax = WaterSplashSystem.calculateBubbleTrailRadiusMax(0.6f, 0.05f, 0.6f);
 		float fastMin = WaterSplashSystem.calculateBubbleTrailRadiusMin(8f, 0.05f, 0.6f);
 		float fastMax = WaterSplashSystem.calculateBubbleTrailRadiusMax(8f, 0.05f, 0.6f);
+		float fastHeavyMax = WaterSplashSystem.calculateBubbleTrailRadiusMax(8f, 12f, 3f);
 
 		assertTrue(fastMax > slowMax * 4f);
 		assertTrue(fastMax - fastMin > (slowMax - slowMin) * 5f);
+		assertTrue(fastHeavyMax > fastMax * 1.2f);
+		assertTrue(fastHeavyMax > 0.34f);
 	}
 
 	@Test
@@ -209,7 +212,15 @@ public class WaterSplashSystemTest {
 		float heavyRate = WaterSplashSystem.calculateBubbleTrailRate(8f, 12f, 3f);
 
 		assertTrue(lightRate > 0f);
-		assertTrue(heavyRate > lightRate * 3f);
+		assertTrue(heavyRate > lightRate * 20f);
+		assertTrue(heavyRate > 180f);
+	}
+
+	@Test
+	public void bubbleTrailStressRateCapsAtVeryDensePeak(){
+		assertEquals(240f, WaterSplashSystem.calculateBubbleTrailRate(40f, 100f, 20f), 0.0001f);
+		assertTrue(WaterSplashSystem.calculateBubbleTrailRate(8f, 12f, 3f)
+				> WaterSplashSystem.calculateBubbleTrailRate(8f, 0.02f, 0.1f));
 	}
 
 	@Test

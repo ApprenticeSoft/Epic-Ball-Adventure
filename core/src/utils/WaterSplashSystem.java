@@ -66,7 +66,7 @@ public class WaterSplashSystem {
 	private static final int MIN_DROPLETS_PER_IMPACT = 8;
 	private static final int MAX_DROPLETS_PER_IMPACT = 96;
 	private static final float MAX_DROPLET_SPREAD = 28f;
-	private static final int MAX_BUBBLES = 280;
+	private static final int MAX_BUBBLES = 900;
 	private static final float BUBBLE_SURFACE_MARGIN = 0.04f;
 	private static final float MIN_BUBBLE_TRAIL_DESCENT_SPEED = 0.35f;
 	private static final float BUBBLE_TRAIL_REFERENCE_SPEED = 8f;
@@ -75,8 +75,8 @@ public class WaterSplashSystem {
 	private static final float BUBBLE_MAX_RISE_ACCEL = 2.7f;
 	private static final float BUBBLE_MIN_RISE_SPEED = 0.9f;
 	private static final float BUBBLE_MAX_RISE_SPEED = 3.4f;
-	private static final int MAX_TRAIL_BUBBLES_PER_STEP = 10;
-	private static final int MAX_BUBBLE_SPAWN_SAMPLE_ATTEMPTS = 24;
+	private static final int MAX_TRAIL_BUBBLES_PER_STEP = 36;
+	private static final int MAX_BUBBLE_SPAWN_SAMPLE_ATTEMPTS = 64;
 	private static final int MAX_SURFACE_SAMPLES = 192;
 
 	private final World world;
@@ -942,8 +942,10 @@ public class WaterSplashSystem {
 		float safeMass = Math.max(0.02f, mass);
 		float safeSize = Math.max(0.1f, size);
 		float speedScale = calculateBubbleTrailSpeedScale(descentSpeed);
-		return MathUtils.clamp(0.035f + safeSize * 0.018f + (float)Math.sqrt(safeMass) * 0.004f
-				+ speedScale * 0.09f, 0.035f, 0.28f);
+		float bodyScale = MathUtils.lerp(0.35f, 1f, speedScale);
+		return MathUtils.clamp(0.035f
+				+ (safeSize * 0.022f + (float)Math.sqrt(safeMass) * 0.006f) * bodyScale
+				+ speedScale * 0.13f, 0.035f, 0.36f);
 	}
 
 	static float calculateBubbleTrailRadiusMin(float descentSpeed, float mass, float size){
@@ -953,7 +955,7 @@ public class WaterSplashSystem {
 
 	static float calculateBubbleTrailRadiusMax(float descentSpeed, float mass, float size){
 		float speedScale = calculateBubbleTrailSpeedScale(descentSpeed);
-		return calculateBubbleTrailRadiusBase(descentSpeed, mass, size) * MathUtils.lerp(0.72f, 1.55f, speedScale);
+		return calculateBubbleTrailRadiusBase(descentSpeed, mass, size) * MathUtils.lerp(0.72f, 1.75f, speedScale);
 	}
 
 	static float minimumBubbleSpawnDepth(float radiusBase){
@@ -979,8 +981,11 @@ public class WaterSplashSystem {
 		float safeMass = Math.max(0.02f, mass);
 		float safeSize = Math.max(0.1f, size);
 		float speedScale = calculateBubbleTrailSpeedScale(speed);
-		return MathUtils.clamp((speed - MIN_BUBBLE_TRAIL_DESCENT_SPEED) * 4.5f
-				+ speedScale * ((float)Math.sqrt(safeMass) * 0.7f + safeSize * 0.55f), 0f, 48f);
+		float speedExcess = speed - MIN_BUBBLE_TRAIL_DESCENT_SPEED;
+		float speedRate = speedExcess * MathUtils.lerp(7.5f, 14f, speedScale);
+		float bodyBonus = MathUtils.clamp((float)Math.sqrt(safeMass) * 0.18f + safeSize * 0.12f,
+				0f, 1.35f);
+		return MathUtils.clamp(speedRate * (1f + speedScale * bodyBonus), 0f, 240f);
 	}
 
 	static float calculateBubbleTrailSpeedScale(float descentSpeed){
