@@ -233,6 +233,76 @@ test('desktop editor opens and returns from playtest with Escape', async ({ page
   }
 });
 
+test('desktop editor blocks invalid debug play before launching', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
+
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if (message.type() === 'error') {
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1&ballStartEditor=1&ballDebugEditorInvalidPlay=1');
+    await waitForDebugEvent(page, logs, 'level editor opened', 10000);
+    await waitForDebugEvent(page, logs, 'level editor validation Play blocked errors=Missing Start object', 10000);
+    const events = await getDebugEvents(page);
+    expect(events.some(line => line.includes('loaded editor test map'))).toBe(false);
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
+test('desktop editor loads a bundled level before playtest', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
+
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if (message.type() === 'error') {
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1&ballStartEditor=1&ballDebugEditorLoadLevel=3');
+    await waitForDebugEvent(page, logs, 'level editor opened', 10000);
+    await waitForDebugEvent(page, logs, 'level editor loaded file=Level 3.tmx', 10000);
+    await page.keyboard.press('P');
+    await waitForDebugEvent(page, logs, 'loaded editor test map', 10000);
+    await page.keyboard.press('Escape');
+    await waitForDebugEvent(page, logs, 'return to editor from test', 10000);
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
 test('desktop editor remains responsive while zooming and panning', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes('mobile'), 'Editor is desktop-only.');
 

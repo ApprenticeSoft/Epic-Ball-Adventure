@@ -60,4 +60,18 @@ public class EditorTmxWriterTest {
 		assertTrue(xml.contains("240,64"));
 		assertTrue(xml.contains("<polyline points=\"0,0 128,96 256,0\"/>"));
 	}
+
+	@Test
+	public void writesTypedBooleanAndRuntimeContactProperties(){
+		EditorLevel level = new EditorLevel();
+		EditorLevelObject platform = level.createObject(EditorObjectType.PLATFORM, 640, 320);
+		platform.properties.put("Loop", "true");
+		EditorLevelObject swing = level.createObject(EditorObjectType.SWING, 1200, 500);
+		swing.properties.put("Contact", "oui");
+
+		String xml = EditorTmxWriter.write(level);
+
+		assertTrue(xml.contains("<property name=\"Loop\" type=\"bool\" value=\"true\"/>"));
+		assertTrue(xml.contains("<property name=\"Contact\" value=\"oui\"/>"));
+	}
 }

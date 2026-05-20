@@ -40,9 +40,7 @@ public class Plateforme {
 			vitesse = Float.parseFloat(polylineObject.getProperties().get("Speed").toString());
 		else vitesse = 5;
 
-		if(polylineObject.getProperties().get("Loop") != null)
-			boucle = true;
-		else boucle = false;
+		boucle = booleanProperty(polylineObject.getProperties().get("Loop"), true);
 
 		if(polylineObject.getProperties().get("Width") != null)
 			largeur = Float.parseFloat(polylineObject.getProperties().get("Width").toString());
@@ -136,6 +134,16 @@ public class Plateforme {
 
 	public float getY(){
 		return body.getPosition().y;
+	}
+
+	private static boolean booleanProperty(Object value, boolean presenceOnlyMeansTrue){
+		if(value == null)
+			return false;
+		String text = value.toString().trim();
+		if(text.length() == 0)
+			return presenceOnlyMeansTrue;
+		return "true".equalsIgnoreCase(text) || "oui".equalsIgnoreCase(text)
+				|| "yes".equalsIgnoreCase(text) || "1".equals(text);
 	}
 
 	public void draw(SpriteBatch batch, TextureAtlas textureAtlas, Couleurs couleurs){

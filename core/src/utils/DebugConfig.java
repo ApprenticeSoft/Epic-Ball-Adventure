@@ -10,6 +10,7 @@ public final class DebugConfig {
 	public static boolean startEditor;
 	public static boolean waterBubbleProbe;
 	public static boolean waterTuningOverlay;
+	public static boolean editorInvalidPlayProbe;
 	public static boolean adaptiveBubbleThrottle = true;
 	public static float autoAdvanceDelay = 0.35f;
 	public static float waterBubbleDensityMultiplier = 1f;
@@ -17,13 +18,14 @@ public final class DebugConfig {
 	public static float waterBubbleLifetimeMultiplier = 1f;
 	public static float waterFoamAmount = 1f;
 	public static int startLevel = 1;
+	public static int editorLoadLevel = 0;
 
 	private DebugConfig(){
 	}
 
 	public static boolean isEnabled(){
 		return transitionLogs || autoAdvanceLevels || showRestartOverlay || startEditor
-				|| waterBubbleProbe || waterTuningOverlay;
+				|| waterBubbleProbe || waterTuningOverlay || editorInvalidPlayProbe || editorLoadLevel > 0;
 	}
 
 	public static float waterBubbleDensityScale(){
@@ -80,6 +82,7 @@ public final class DebugConfig {
 		startEditor = false;
 		waterBubbleProbe = false;
 		waterTuningOverlay = false;
+		editorInvalidPlayProbe = false;
 		adaptiveBubbleThrottle = true;
 		autoAdvanceDelay = 0.35f;
 		waterBubbleDensityMultiplier = 1f;
@@ -87,5 +90,6 @@ public final class DebugConfig {
 		waterBubbleLifetimeMultiplier = 1f;
 		waterFoamAmount = 1f;
 		startLevel = 1;
+		editorLoadLevel = 0;
 	}
 }

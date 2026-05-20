@@ -74,9 +74,8 @@ public class ObstacleBalance extends Obstacle{
 		}
 
 		//Collision
-		if(rectangleObject.getProperties().get("Contact") != null)
-			if(rectangleObject.getProperties().get("Contact").toString().equals("oui"))
-				body.setUserData("Contact");
+		if(booleanProperty(rectangleObject.getProperties().get("Contact")))
+			body.setUserData("Contact");
 		//Vitesse et force
 		if(rectangleObject.getProperties().get("Speed") != null)
 			speed = Float.parseFloat(rectangleObject.getProperties().get("Speed").toString());
@@ -139,5 +138,13 @@ public class ObstacleBalance extends Obstacle{
 	@Override
 	public void initiate(){
 		resetBodyToInitial();
+	}
+
+	private static boolean booleanProperty(Object value){
+		if(value == null)
+			return false;
+		String text = value.toString().trim();
+		return "true".equalsIgnoreCase(text) || "oui".equalsIgnoreCase(text)
+				|| "yes".equalsIgnoreCase(text) || "1".equals(text);
 	}
 }

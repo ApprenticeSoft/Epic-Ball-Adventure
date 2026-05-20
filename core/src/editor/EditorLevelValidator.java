@@ -75,17 +75,44 @@ public final class EditorLevelValidator {
 				continue;
 			try{
 				float parsed = Float.parseFloat(value);
+				if(Float.isNaN(parsed) || Float.isInfinite(parsed)){
+					errors.add(object.type.label + " " + propertyName + " must be numeric");
+					continue;
+				}
 				if(requiresPositiveValue(propertyName) && parsed <= 0f)
 					errors.add(object.type.label + " " + propertyName + " must be positive");
 				if("Groupe".equals(propertyName) && Math.abs(parsed - Math.round(parsed)) > 0.0001f)
 					errors.add("Poulie Groupe must be an integer");
+				if("Groupe".equals(propertyName) && parsed <= 0f)
+					errors.add("Poulie Groupe must be positive");
 			}
 			catch(NumberFormatException exception){
 				errors.add(object.type.label + " " + propertyName + " must be numeric");
 			}
 		}
+		validateBooleanProperties(object, errors);
 		if(object.type == EditorObjectType.POULIE && object.properties.get("Groupe") == null)
 			errors.add("Poulie is missing Groupe");
+	}
+
+	private static void validateBooleanProperties(EditorLevelObject object, Array<String> errors){
+		if(object.type == EditorObjectType.PLATFORM)
+			validateBooleanProperty(object, "Loop", true, errors);
+		else if(object.type == EditorObjectType.SWING)
+			validateBooleanProperty(object, "Contact", false, errors);
+	}
+
+	private static void validateBooleanProperty(EditorLevelObject object, String propertyName, boolean allowPresenceOnly,
+			Array<String> errors){
+		String value = object.properties.get(propertyName);
+		if(value == null)
+			return;
+		String trimmed = value.trim();
+		if(trimmed.length() == 0 && allowPresenceOnly)
+			return;
+		if(isBooleanValue(trimmed))
+			return;
+		errors.add(object.type.label + " " + propertyName + " must be true or false");
 	}
 
 	private static void validatePulleyPairs(EditorLevel level, Array<String> errors){
@@ -128,5 +155,11 @@ public final class EditorLevelValidator {
 	private static boolean requiresPositiveValue(String propertyName){
 		return "Weight".equals(propertyName) || "Masse".equals(propertyName) || "longueur".equals(propertyName)
 				|| "Length".equals(propertyName) || "Width".equals(propertyName) || "Torque".equals(propertyName);
+	}
+
+	private static boolean isBooleanValue(String value){
+		return "true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value) || "oui".equalsIgnoreCase(value)
+				|| "non".equalsIgnoreCase(value) || "yes".equalsIgnoreCase(value) || "no".equalsIgnoreCase(value)
+				|| "1".equals(value) || "0".equals(value);
 	}
 }

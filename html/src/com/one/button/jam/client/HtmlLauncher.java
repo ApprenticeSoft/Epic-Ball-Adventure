@@ -32,7 +32,9 @@ public class HtmlLauncher extends GwtApplication {
         DebugConfig.startEditor = hasFlag("ballStartEditor");
         DebugConfig.waterBubbleProbe = hasFlag("ballDebugWaterBubbles");
         DebugConfig.waterTuningOverlay = hasFlag("ballDebugWaterTuning");
+        DebugConfig.editorInvalidPlayProbe = hasFlag("ballDebugEditorInvalidPlay");
         DebugConfig.startLevel = getIntParameter("ballStartLevel", 1);
+        DebugConfig.editorLoadLevel = getIntParameter("ballDebugEditorLoadLevel", 0);
         DebugConfig.autoAdvanceDelay = getFloatParameter("ballAutoAdvanceDelay", 0.35f);
         PlatformInfo.mobileBrowser = isMobileBrowser();
     }

@@ -42,6 +42,34 @@ public class EditorLevelValidatorTest {
 	}
 
 	@Test
+	public void rejectsBadBooleanAndNonPositivePulleyGroup(){
+		EditorLevel level = new EditorLevel();
+		EditorLevelObject platform = level.createObject(EditorObjectType.PLATFORM, 320, 320);
+		platform.properties.put("Loop", "sometimes");
+		EditorLevelObject pulley = level.createObject(EditorObjectType.POULIE, 640, 320);
+		pulley.properties.put("Groupe", "0");
+
+		Array<String> errors = EditorLevelValidator.validate(level);
+
+		assertContains(errors, "Platform Loop must be true or false");
+		assertContains(errors, "Poulie Groupe must be positive");
+	}
+
+	@Test
+	public void acceptsRuntimeCompatibleBooleanValues(){
+		EditorLevel level = new EditorLevel();
+		EditorLevelObject platform = level.createObject(EditorObjectType.PLATFORM, 320, 320);
+		platform.properties.put("Loop", "false");
+		EditorLevelObject swing = level.createObject(EditorObjectType.SWING, 640, 320);
+		swing.properties.put("Contact", "oui");
+
+		Array<String> errors = EditorLevelValidator.validate(level);
+
+		assertFalse(errors.contains("Platform Loop must be true or false", false));
+		assertFalse(errors.contains("Swing Contact must be true or false", false));
+	}
+
+	@Test
 	public void rejectsObjectsOutsideWorldBounds(){
 		EditorLevel level = new EditorLevel();
 		level.createObject(EditorObjectType.SOLID, -320, 320);

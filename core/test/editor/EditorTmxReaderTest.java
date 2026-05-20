@@ -4,6 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.badlogic.gdx.utils.Array;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 public class EditorTmxReaderTest {
@@ -70,5 +76,30 @@ public class EditorTmxReaderTest {
 		EditorLevel level = EditorTmxReader.read("Legacy.tmx", xml);
 
 		assertEquals(EditorObjectType.BALANCOIRE, level.objects.first().type);
+	}
+
+	@Test
+	public void importsEveryBundledLevelWithoutDroppingObjects() throws IOException{
+		Path levelsDir = Path.of(System.getProperty("assets.dir"), "Levels");
+		int importedLevels = 0;
+		try(DirectoryStream<Path> files = Files.newDirectoryStream(levelsDir, "Level *.tmx")){
+			for(Path file : files){
+				String xml = Files.readString(file, StandardCharsets.UTF_8);
+				EditorLevel level = EditorTmxReader.read(file.getFileName().toString(), xml);
+				Array<String> errors = EditorLevelValidator.validate(level);
+
+				assertEquals(countObjects(xml), level.objects.size, file.toString());
+				assertNotNull(level.getStart(), file.toString());
+				assertNotNull(level.getExit(), file.toString());
+				assertTrue(errors.isEmpty(), file + " validation errors: " + errors);
+				assertTrue(EditorTmxWriter.write(level).contains("<objectgroup id=\"2\" name=\"Objects\">"));
+				importedLevels++;
+			}
+		}
+		assertEquals(5, importedLevels);
+	}
+
+	private static int countObjects(String xml){
+		return xml.split("<object ", -1).length - 1;
 	}
 }

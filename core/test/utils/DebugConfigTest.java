@@ -1,6 +1,7 @@
 package utils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import org.junit.jupiter.api.Test;
 
@@ -23,5 +24,16 @@ public class DebugConfigTest {
 		assertEquals(3f, DebugConfig.waterFoamAmountScale(), 0.0001f);
 
 		DebugConfig.reset();
+	}
+
+	@Test
+	public void resetClearsEditorDebugProbes(){
+		DebugConfig.editorInvalidPlayProbe = true;
+		DebugConfig.editorLoadLevel = 3;
+
+		DebugConfig.reset();
+
+		assertFalse(DebugConfig.editorInvalidPlayProbe);
+		assertEquals(0, DebugConfig.editorLoadLevel);
 	}
 }

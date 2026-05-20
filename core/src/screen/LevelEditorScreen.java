@@ -212,6 +212,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		buildUi();
 		resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		DebugConfig.log("level editor opened");
+		runDebugEditorStartupAction();
 	}
 
 	@Override
@@ -759,32 +760,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			});
 			String[] propertyNames = propertyNames(selectedObject.type);
 			for(final String propertyName : propertyNames){
-				if("Loop".equals(propertyName)){
-					addBooleanField(leftTable, propertyName, selectedObject.properties.get(propertyName) != null, new BooleanSetter() {
-						@Override
-						public void set(boolean value) {
-							recordUndo("Edit " + propertyName);
-							if(value)
-								selectedObject.properties.put(propertyName, "true");
-							else
-								selectedObject.properties.remove(propertyName);
-							markHoverDirty();
-						}
-					});
-				}
-				else{
-					addTextField(leftTable, propertyName, selectedObject.properties.get(propertyName), new TextSetter() {
-						@Override
-						public void set(String value) {
-							recordUndo("Edit " + propertyName);
-							if(value == null || value.trim().length() == 0)
-								selectedObject.properties.remove(propertyName);
-							else
-								selectedObject.properties.put(propertyName, value);
-							markHoverDirty();
-						}
-					});
-				}
+				addPropertyField(leftTable, propertyName);
 			}
 			TextButton duplicateButton = addButton(leftTable, "Duplicate");
 			duplicateButton.addListener(new ChangeListener() {
@@ -944,6 +920,107 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		return checkBox;
 	}
 
+	private void addPropertyField(Table table, final String propertyName){
+		String value = selectedObject.properties.get(propertyName);
+		if("Loop".equals(propertyName)){
+			addBooleanField(table, propertyName, booleanPropertyEnabled(value, true), new BooleanSetter() {
+				@Override
+				public void set(boolean value) {
+					setSelectedProperty(propertyName, value ? "true" : null);
+				}
+			});
+		}
+		else if("Contact".equals(propertyName)){
+			addBooleanField(table, propertyName, booleanPropertyEnabled(value, false), new BooleanSetter() {
+				@Override
+				public void set(boolean value) {
+					setSelectedProperty(propertyName, value ? "oui" : null);
+				}
+			});
+		}
+		else if("Groupe".equals(propertyName)){
+			addOptionalIntegerField(table, propertyName, value, new TextSetter() {
+				@Override
+				public void set(String value) {
+					setSelectedProperty(propertyName, value);
+				}
+			});
+		}
+		else if(isNumericProperty(propertyName)){
+			addOptionalNumberField(table, propertyName, value, new TextSetter() {
+				@Override
+				public void set(String value) {
+					setSelectedProperty(propertyName, value);
+				}
+			});
+		}
+		else{
+			addTextField(table, propertyName, value, new TextSetter() {
+				@Override
+				public void set(String value) {
+					setSelectedProperty(propertyName, value);
+				}
+			});
+		}
+	}
+
+	private TextField addOptionalNumberField(Table table, final String labelText, String value, final TextSetter setter){
+		TextField field = addTextField(table, labelText, value, new TextSetter() {
+			@Override
+			public void set(String value) {
+				String trimmed = value == null ? "" : value.trim();
+				if(trimmed.length() == 0){
+					setter.set(null);
+					return;
+				}
+				try{
+					float parsed = Float.parseFloat(trimmed);
+					if(Float.isNaN(parsed) || Float.isInfinite(parsed)){
+						setStatus(labelText + " must be numeric");
+						return;
+					}
+					setter.set(number(parsed));
+				}
+				catch(NumberFormatException exception){
+					setStatus(labelText + " must be numeric");
+				}
+			}
+		});
+		field.setTextFieldFilter(new TextField.TextFieldFilter() {
+			@Override
+			public boolean acceptChar(TextField textField, char c) {
+				return isNumberCharacter(c);
+			}
+		});
+		return field;
+	}
+
+	private TextField addOptionalIntegerField(Table table, final String labelText, String value, final TextSetter setter){
+		TextField field = addTextField(table, labelText, value, new TextSetter() {
+			@Override
+			public void set(String value) {
+				String trimmed = value == null ? "" : value.trim();
+				if(trimmed.length() == 0){
+					setter.set(null);
+					return;
+				}
+				try{
+					setter.set(String.valueOf(Integer.parseInt(trimmed)));
+				}
+				catch(NumberFormatException exception){
+					setStatus(labelText + " must be an integer");
+				}
+			}
+		});
+		field.setTextFieldFilter(new TextField.TextFieldFilter() {
+			@Override
+			public boolean acceptChar(TextField textField, char c) {
+				return isIntegerCharacter(c);
+			}
+		});
+		return field;
+	}
+
 	private void saveLevel(){
 		try{
 			Array<String> errors = validateLevel();
@@ -996,6 +1073,22 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		DebugConfig.log("level editor playtest start objects=" + level.objects.size);
 		TiledMap map = EditorTiledMapFactory.build(level);
 		game.setScreen(new GameScreen(game, map, this));
+	}
+
+	private void runDebugEditorStartupAction(){
+		if(DebugConfig.editorLoadLevel > 0){
+			level.fileName = "Level " + DebugConfig.editorLoadLevel + ".tmx";
+			loadLevel();
+		}
+		if(DebugConfig.editorInvalidPlayProbe){
+			EditorLevelObject start = level.getStart();
+			if(start != null)
+				level.remove(start);
+			selectedObject = null;
+			buildLeftPanel();
+			markHoverDirty();
+			playLevel();
+		}
 	}
 
 	private Array<String> validateLevel(){
@@ -1661,6 +1754,50 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		if(type == EditorObjectType.PLATFORM)
 			return new String[]{"Speed", "Width", "Loop"};
 		return new String[0];
+	}
+
+	private boolean isNumericProperty(String propertyName){
+		return "Speed".equals(propertyName) || "Weight".equals(propertyName) || "Torque".equals(propertyName)
+				|| "PowerX".equals(propertyName) || "PowerY".equals(propertyName) || "Position".equals(propertyName)
+				|| "Length".equals(propertyName) || "Width".equals(propertyName) || "Masse".equals(propertyName)
+				|| "longueur".equals(propertyName) || "AttacheY".equals(propertyName)
+				|| "angleRef".equals(propertyName) || "angleMin".equals(propertyName) || "angleMax".equals(propertyName);
+	}
+
+	private void setSelectedProperty(String propertyName, String value){
+		if(selectedObject == null)
+			return;
+		String normalized = value == null || value.trim().length() == 0 ? null : value.trim();
+		boolean hasCurrent = selectedObject.properties.containsKey(propertyName);
+		String current = selectedObject.properties.get(propertyName);
+		if(!hasCurrent && normalized == null)
+			return;
+		if(hasCurrent && normalized != null && normalized.equals(current))
+			return;
+		recordUndo("Edit " + propertyName);
+		if(normalized == null)
+			selectedObject.properties.remove(propertyName);
+		else
+			selectedObject.properties.put(propertyName, normalized);
+		markHoverDirty();
+	}
+
+	private boolean booleanPropertyEnabled(String value, boolean presenceOnlyMeansTrue){
+		if(value == null)
+			return false;
+		String trimmed = value.trim();
+		if(trimmed.length() == 0)
+			return presenceOnlyMeansTrue;
+		return "true".equalsIgnoreCase(trimmed) || "oui".equalsIgnoreCase(trimmed)
+				|| "yes".equalsIgnoreCase(trimmed) || "1".equals(trimmed);
+	}
+
+	private boolean isNumberCharacter(char c){
+		return c >= '0' && c <= '9' || c == '-' || c == '+' || c == '.';
+	}
+
+	private boolean isIntegerCharacter(char c){
+		return c >= '0' && c <= '9' || c == '-' || c == '+';
 	}
 
 	private float propertyFloat(EditorLevelObject object, String propertyName, float fallback){
