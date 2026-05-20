@@ -33,6 +33,22 @@ test('debug water bubble probe spawns visible-frame bubbles', async ({ page }, t
   });
 });
 
+test('debug water tuning overlay starts and keeps rendering', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Desktop capture is enough for the tuning overlay.');
+  const logs = [];
+  page.on('console', message => logs.push(message.text()));
+
+  await page.goto('/?ballDebug=1&ballStartLevel=3&ballDebugWaterTuning=1');
+  await waitForDebugEvent(page, logs, 'main menu layout', 10000);
+  await startGame(page, testInfo.project.name);
+  await waitForDebugEvent(page, logs, 'water tuning overlay ready', 10000);
+
+  await expect.poll(async () => await screenshotHasNonBlackPixels(page), {
+    timeout: 5000,
+    message: 'Expected the game to keep rendering with the water tuning overlay active.'
+  }).toBe(true);
+});
+
 test('auto-advances through every level without a black screen', async ({ page }, testInfo) => {
   const logs = [];
   const errors = [];

@@ -224,6 +224,44 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void bubbleWakeVelocityTrailsOppositeBodyMotion(){
+		Vector2 baseVelocity = new Vector2(0f, 1f);
+		Vector2 bodyVelocity = new Vector2(6f, -8f);
+		Vector2 wakeVelocity = WaterSplashSystem.applyBubbleWakeVelocity(baseVelocity, bodyVelocity, 8f, new Vector2());
+
+		assertTrue(wakeVelocity.dot(bodyVelocity) < baseVelocity.dot(bodyVelocity));
+		assertTrue(wakeVelocity.x < 0f);
+		assertTrue(wakeVelocity.y > baseVelocity.y);
+	}
+
+	@Test
+	public void surfaceFoamScalesWithBubbleSizeDensityAndAmount(){
+		assertEquals(0, WaterSplashSystem.calculateSurfaceFoamFleckCount(0.2f, 1f, 0f));
+		assertEquals(0f, WaterSplashSystem.calculateSurfaceFoamAlpha(0.2f, 1f, 0f), 0.0001f);
+
+		int smallCount = WaterSplashSystem.calculateSurfaceFoamFleckCount(0.05f, 0.5f, 1f);
+		int denseCount = WaterSplashSystem.calculateSurfaceFoamFleckCount(0.28f, 2f, 1f);
+		float smallAlpha = WaterSplashSystem.calculateSurfaceFoamAlpha(0.05f, 0.5f, 1f);
+		float denseAlpha = WaterSplashSystem.calculateSurfaceFoamAlpha(0.28f, 2f, 1f);
+
+		assertTrue(denseCount > smallCount);
+		assertTrue(denseAlpha > smallAlpha);
+		assertTrue(WaterSplashSystem.calculateSurfaceFoamSpread(0.28f, 2f)
+				> WaterSplashSystem.calculateSurfaceFoamSpread(0.05f, 0.5f));
+	}
+
+	@Test
+	public void adaptiveBubbleThrottleDropsAndRecovers(){
+		float throttled = WaterSplashSystem.calculateAdaptiveBubbleSpawnThrottle(1f, 0.08f, true);
+		float recovered = WaterSplashSystem.calculateAdaptiveBubbleSpawnThrottle(throttled, 0.01f, true);
+
+		assertTrue(throttled < 1f);
+		assertTrue(recovered > throttled);
+		assertEquals(1f, WaterSplashSystem.calculateAdaptiveBubbleSpawnThrottle(throttled, 0.08f, false),
+				0.0001f);
+	}
+
+	@Test
 	public void bubbleTrailWindowScalesWithImpactDescent(){
 		assertTrue(WaterSplashSystem.calculateBubbleTrailWindow(8f, 1.2f)
 				> WaterSplashSystem.calculateBubbleTrailWindow(1f, 0.4f));

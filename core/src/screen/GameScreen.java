@@ -14,6 +14,7 @@ import bodies.Eau;
 import bodies.Obstacle;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.Screen;
@@ -21,7 +22,9 @@ import com.badlogic.gdx.Application.ApplicationType;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Pixmap.Format;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.PolygonSpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
@@ -31,6 +34,7 @@ import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.box2d.Body;
@@ -42,9 +46,16 @@ import com.badlogic.gdx.physics.box2d.Fixture;
 import com.badlogic.gdx.physics.box2d.Manifold;
 import com.badlogic.gdx.physics.box2d.World;
 import com.badlogic.gdx.physics.box2d.BodyDef.BodyType;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.one.button.jam.Couleurs;
@@ -56,6 +67,8 @@ public class GameScreen extends InputAdapter implements Screen{
 	private static final int MAX_PHYSICS_STEPS = 5;
 	private static final float LEVEL_TRANSITION_DURATION = 1.35f;
 	private static final float MOBILE_CAMERA_SHORT_SIDE_WORLD = 48f;
+	private static final float WATER_TUNING_FONT_SCALE = 0.16f;
+	private static final float WATER_TUNING_BUTTON_HEIGHT = 28f;
 
 	final MyGdxGame game;
 	private MyCamera camera;
@@ -65,8 +78,10 @@ public class GameScreen extends InputAdapter implements Screen{
 	private World world;
     private Box2DDebugRenderer debugRenderer;
     private Stage stage;
+	private Stage waterTuningStage;
 
 	private TextureAtlas textureAtlas;
+	private Texture waterTuningUiTexture;
 
     private int nbTileHorizontal, dimension;
 	private float ratio;
@@ -74,6 +89,12 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	private LabelStyle labelStyleRestart, labelStyleRestartOmbre;
 	private Label labelRestart, labelRestartOmbre;
+	private LabelStyle waterTuningLabelStyle, waterTuningTitleStyle;
+	private TextButton.TextButtonStyle waterTuningButtonStyle;
+	private Drawable waterTuningPanelDrawable;
+	private Label waterTuningDensityLabel, waterTuningSizeLabel, waterTuningLifetimeLabel, waterTuningFoamLabel;
+	private Label waterTuningStatusLabel;
+	private TextButton waterTuningAdaptiveButton;
 
 	private PolygonSpriteBatch polyBatch;
 	private WaterSplashSystem waterSplashSystem;
@@ -201,6 +222,8 @@ public class GameScreen extends InputAdapter implements Screen{
 
 		stage.addActor(labelRestartOmbre);
 		stage.addActor(labelRestart);
+		if(DebugConfig.waterTuningOverlay)
+			createWaterTuningOverlay();
 
         /*******************TEST SHADERS**********************/
 		ShaderProgram.pedantic = false;	//Important pour pouvoir modifier les variables uniformes
@@ -275,11 +298,16 @@ public class GameScreen extends InputAdapter implements Screen{
         }
         if(DebugConfig.showRestartOverlay && !Variables.levelComplete && !gameCompleted)
 			debugRestartOverlay();
+		if(waterTuningStage != null && !gameCompleted)
+			drawWaterTuningOverlay(frameDelta);
 	}
 
 	@Override
 	public void show() {
-		Gdx.input.setInputProcessor(this);
+		if(waterTuningStage != null)
+			Gdx.input.setInputProcessor(new InputMultiplexer(waterTuningStage, this));
+		else
+			Gdx.input.setInputProcessor(this);
 		world.setContactListener(new ContactListener(){
 			@Override
 			public void beginContact(Contact contact) {
@@ -425,6 +453,8 @@ public class GameScreen extends InputAdapter implements Screen{
 			stage.getViewport().update(width, height, true);
 			layoutRestartLabels();
         }
+        if(waterTuningStage != null)
+			waterTuningStage.getViewport().update(width, height, true);
         resizeFrameBuffer(Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         if(waterRefractionRenderer != null)
 			waterRefractionRenderer.resize(Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
@@ -464,6 +494,10 @@ public class GameScreen extends InputAdapter implements Screen{
 			debugRenderer.dispose();
 		if(stage != null)
 			stage.dispose();
+		if(waterTuningStage != null)
+			waterTuningStage.dispose();
+		if(waterTuningUiTexture != null)
+			waterTuningUiTexture.dispose();
 		if(polyBatch != null)
 			polyBatch.dispose();
 		if(waterRefractionRenderer != null)
@@ -660,6 +694,171 @@ public class GameScreen extends InputAdapter implements Screen{
 		layoutRestartLabels();
 		stage.act();
 		stage.draw();
+	}
+
+	private void createWaterTuningOverlay(){
+		waterTuningStage = new Stage(new ScreenViewport());
+		createWaterTuningStyles();
+		Table root = new Table();
+		root.setFillParent(true);
+		root.top().left().pad(8f);
+		root.setTouchable(Touchable.childrenOnly);
+
+		Table panel = new Table();
+		panel.setTouchable(Touchable.childrenOnly);
+		panel.setBackground(waterTuningPanelDrawable);
+		panel.pad(8f);
+		panel.defaults().pad(2f);
+
+		Label title = waterTuningLabel("Water tuning", waterTuningTitleStyle);
+		panel.add(title).colspan(4).left().growX();
+		panel.row();
+
+		waterTuningDensityLabel = addWaterTuningControl(panel, "Density", new WaterTuningAdjustment() {
+			@Override
+			public void adjust(float delta) {
+				DebugConfig.setWaterBubbleDensityMultiplier(DebugConfig.waterBubbleDensityScale() + delta * 0.25f);
+			}
+		});
+		waterTuningSizeLabel = addWaterTuningControl(panel, "Size", new WaterTuningAdjustment() {
+			@Override
+			public void adjust(float delta) {
+				DebugConfig.setWaterBubbleSizeMultiplier(DebugConfig.waterBubbleSizeScale() + delta * 0.15f);
+			}
+		});
+		waterTuningLifetimeLabel = addWaterTuningControl(panel, "Lifetime", new WaterTuningAdjustment() {
+			@Override
+			public void adjust(float delta) {
+				DebugConfig.setWaterBubbleLifetimeMultiplier(DebugConfig.waterBubbleLifetimeScale() + delta * 0.15f);
+			}
+		});
+		waterTuningFoamLabel = addWaterTuningControl(panel, "Foam", new WaterTuningAdjustment() {
+			@Override
+			public void adjust(float delta) {
+				DebugConfig.setWaterFoamAmount(DebugConfig.waterFoamAmountScale() + delta * 0.25f);
+			}
+		});
+
+		Label adaptiveLabel = waterTuningLabel("Adaptive", waterTuningLabelStyle);
+		panel.add(adaptiveLabel).left().width(92f);
+		waterTuningAdaptiveButton = waterTuningButton("On");
+		waterTuningAdaptiveButton.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				DebugConfig.adaptiveBubbleThrottle = !DebugConfig.adaptiveBubbleThrottle;
+				refreshWaterTuningOverlay();
+			}
+		});
+		panel.add(waterTuningAdaptiveButton).height(WATER_TUNING_BUTTON_HEIGHT).colspan(3).growX();
+		panel.row();
+
+		waterTuningStatusLabel = waterTuningLabel("", waterTuningLabelStyle);
+		panel.add(waterTuningStatusLabel).colspan(4).left().growX().padTop(5f);
+		root.add(panel).width(292f).top().left();
+		waterTuningStage.addActor(root);
+		refreshWaterTuningOverlay();
+		DebugConfig.log("water tuning overlay ready");
+	}
+
+	private void createWaterTuningStyles(){
+		Pixmap pixmap = new Pixmap(4, 4, Pixmap.Format.RGBA8888);
+		pixmap.setColor(Color.WHITE);
+		pixmap.fill();
+		waterTuningUiTexture = new Texture(pixmap);
+		pixmap.dispose();
+		TextureRegionDrawable white = new TextureRegionDrawable(new TextureRegion(waterTuningUiTexture));
+		waterTuningPanelDrawable = white.tint(new Color(0.08f, 0.10f, 0.12f, 0.88f));
+		Drawable buttonDrawable = white.tint(new Color(0.20f, 0.26f, 0.30f, 0.96f));
+		Drawable buttonDownDrawable = white.tint(new Color(0.10f, 0.55f, 0.72f, 0.98f));
+
+		BitmapFont font = game.assets.get("fontRestart.ttf", BitmapFont.class);
+		waterTuningLabelStyle = new LabelStyle(font, new Color(0.90f, 0.96f, 1f, 1f));
+		waterTuningTitleStyle = new LabelStyle(font, new Color(1f, 0.88f, 0.34f, 1f));
+		waterTuningButtonStyle = new TextButton.TextButtonStyle();
+		waterTuningButtonStyle.font = font;
+		waterTuningButtonStyle.fontColor = Color.WHITE;
+		waterTuningButtonStyle.downFontColor = Color.WHITE;
+		waterTuningButtonStyle.up = buttonDrawable;
+		waterTuningButtonStyle.down = buttonDownDrawable;
+		waterTuningButtonStyle.checked = buttonDownDrawable;
+	}
+
+	private Label addWaterTuningControl(Table panel, String labelText, final WaterTuningAdjustment adjustment){
+		Label valueLabel = waterTuningLabel("", waterTuningLabelStyle);
+		panel.add(valueLabel).left().width(132f);
+		TextButton minus = waterTuningButton("-");
+		minus.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				adjustment.adjust(-1f);
+				refreshWaterTuningOverlay();
+			}
+		});
+		panel.add(minus).height(WATER_TUNING_BUTTON_HEIGHT).width(40f);
+		TextButton plus = waterTuningButton("+");
+		plus.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				adjustment.adjust(1f);
+				refreshWaterTuningOverlay();
+			}
+		});
+		panel.add(plus).height(WATER_TUNING_BUTTON_HEIGHT).width(40f);
+		Label staticLabel = waterTuningLabel(labelText, waterTuningLabelStyle);
+		panel.add(staticLabel).left().width(58f);
+		panel.row();
+		return valueLabel;
+	}
+
+	private Label waterTuningLabel(String text, LabelStyle style){
+		Label label = new Label(text, style);
+		label.setFontScale(WATER_TUNING_FONT_SCALE);
+		label.setAlignment(Align.left);
+		return label;
+	}
+
+	private TextButton waterTuningButton(String text){
+		TextButton button = new TextButton(text, waterTuningButtonStyle);
+		button.getLabel().setFontScale(WATER_TUNING_FONT_SCALE);
+		return button;
+	}
+
+	private void drawWaterTuningOverlay(float delta){
+		refreshWaterTuningOverlay();
+		waterTuningStage.act(delta);
+		waterTuningStage.draw();
+	}
+
+	private void refreshWaterTuningOverlay(){
+		if(waterTuningStage == null)
+			return;
+		if(waterTuningDensityLabel != null)
+			waterTuningDensityLabel.setText("Density " + decimal(DebugConfig.waterBubbleDensityScale()) + "x");
+		if(waterTuningSizeLabel != null)
+			waterTuningSizeLabel.setText("Size " + decimal(DebugConfig.waterBubbleSizeScale()) + "x");
+		if(waterTuningLifetimeLabel != null)
+			waterTuningLifetimeLabel.setText("Lifetime " + decimal(DebugConfig.waterBubbleLifetimeScale()) + "x");
+		if(waterTuningFoamLabel != null)
+			waterTuningFoamLabel.setText("Foam " + decimal(DebugConfig.waterFoamAmountScale()) + "x");
+		if(waterTuningAdaptiveButton != null)
+			waterTuningAdaptiveButton.setText(DebugConfig.adaptiveBubbleThrottle ? "On" : "Off");
+		if(waterTuningStatusLabel != null && waterSplashSystem != null){
+			waterTuningStatusLabel.setText("B " + waterSplashSystem.getRenderedBubbleCount()
+					+ " F " + waterSplashSystem.getRenderedSurfaceFoamCount()
+					+ " T " + percent(waterSplashSystem.getBubbleSpawnThrottle()));
+		}
+	}
+
+	private static String decimal(float value){
+		return Float.toString(MathUtils.round(value * 10f) / 10f);
+	}
+
+	private static String percent(float value){
+		return Integer.toString(MathUtils.round(value * 100f)) + "%";
+	}
+
+	private interface WaterTuningAdjustment {
+		void adjust(float delta);
 	}
 
 	private void initializeLevelTransition(){
