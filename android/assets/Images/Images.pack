@@ -61,6 +61,13 @@ Exit_background
   orig: 30, 30
   offset: 0, 0
   index: -1
+PlainCircle
+  rotate: false
+  xy: 384, 22
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
 WhiteSquare
   rotate: false
   xy: 2, 2

@@ -12,7 +12,7 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 
 public final class WaterRefractionRenderer {
-	private static final float CALM_DISTORTION_PIXELS = 3.25f;
+	private static final float CALM_DISTORTION_PIXELS = 5.75f;
 	private static final float WAVE_DISTORTION_PIXELS = 25f;
 	private static final float SURFACE_RIPPLE_STRENGTH = 1.18f;
 	private static final float TINT_STRENGTH = 0.18f;
@@ -102,12 +102,17 @@ public final class WaterRefractionRenderer {
 		shader.setUniformi("u_sceneTexture", 1);
 		shader.setUniformf("u_resolution", bufferWidth, bufferHeight);
 		shader.setUniformf("u_time", time);
-		shader.setUniformf("u_calmDistortionPixels", CALM_DISTORTION_PIXELS);
+		shader.setUniformf("u_calmDistortionPixels", calculateDistortionPixels(0f));
 		shader.setUniformf("u_waveDistortionPixels", WAVE_DISTORTION_PIXELS);
 		shader.setUniformf("u_surfaceRippleStrength", SURFACE_RIPPLE_STRENGTH);
 		shader.setUniformf("u_tintStrength", TINT_STRENGTH);
 		shader.setUniformf("u_waveStrength", Math.min(Math.max(waveStrength, 0f), 1f));
 		return true;
+	}
+
+	static float calculateDistortionPixels(float waveStrength){
+		float strength = Math.min(Math.max(waveStrength, 0f), 1f);
+		return CALM_DISTORTION_PIXELS + WAVE_DISTORTION_PIXELS * strength;
 	}
 
 	public void endWaterPass(PolygonSpriteBatch batch){

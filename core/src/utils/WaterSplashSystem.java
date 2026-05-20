@@ -16,6 +16,7 @@ import com.badlogic.gdx.physics.box2d.World;
 import com.badlogic.gdx.utils.Array;
 
 public class WaterSplashSystem {
+	private static final String PARTICLE_CIRCLE_REGION = "PlainCircle";
 	private static final int MAX_PARTICLES = 320;
 	private static final float VISUAL_GRAVITY = 34f;
 	private static final float MIN_SPLASH_SPEED = 1.2f;
@@ -86,6 +87,8 @@ public class WaterSplashSystem {
 	private final Vector2 bubbleWorldPoint = new Vector2();
 	private final Color waveColor = new Color();
 	private final Color bubbleColor = new Color();
+	private final Color bubbleCoreColor = new Color();
+	private final Color bubbleHighlightColor = new Color();
 	private final RippleSegment[] rippleSegments = new RippleSegment[]{
 			new RippleSegment(), new RippleSegment(), new RippleSegment()
 	};
@@ -177,7 +180,7 @@ public class WaterSplashSystem {
 	public void draw(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
 		if(particles.size == 0)
 			return;
-		TextureRegion dropRegion = textureAtlas.findRegion("BallColor");
+		TextureRegion dropRegion = findParticleCircleRegion(textureAtlas);
 		TextureRegion flatRegion = textureAtlas.findRegion("WhiteSquare");
 		for(SplashParticle particle : particles){
 			float alpha = cappedRenderAlpha(particle, waterColor);
@@ -210,9 +213,7 @@ public class WaterSplashSystem {
 	public void drawBubbles(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
 		if(bubbles.size == 0)
 			return;
-		TextureRegion region = textureAtlas.findRegion("BallColor");
-		if(region == null)
-			region = textureAtlas.findRegion("WhiteSquare");
+		TextureRegion region = findParticleCircleRegion(textureAtlas);
 		if(region == null)
 			return;
 		float waterAlpha = waterAlpha(waterColor);
@@ -220,9 +221,9 @@ public class WaterSplashSystem {
 			float alpha = capToWaterAlpha(bubble.renderAlpha(surfaceFadeForBubble(bubble)), waterAlpha);
 			if(alpha <= 0.005f)
 				continue;
+			float radius = bubble.renderRadius();
 			setBubbleColor(waterColor, alpha, bubbleColor);
 			batch.setColor(bubbleColor);
-			float radius = bubble.renderRadius();
 			batch.draw(region,
 					bubble.position.x - radius,
 					bubble.position.y - radius,
@@ -233,6 +234,32 @@ public class WaterSplashSystem {
 					1f,
 					1f,
 					0f);
+			float coreRadius = radius * 0.72f;
+			setBubbleCoreColor(waterColor, capToWaterAlpha(alpha * 0.58f, waterAlpha), bubbleCoreColor);
+			batch.setColor(bubbleCoreColor);
+			batch.draw(region,
+					bubble.position.x - coreRadius,
+					bubble.position.y - coreRadius,
+					coreRadius,
+					coreRadius,
+					coreRadius * 2f,
+					coreRadius * 2f,
+					1f,
+					1f,
+					0f);
+			float highlightRadius = radius * 0.26f;
+			setBubbleHighlightColor(capToWaterAlpha(alpha * 0.72f, waterAlpha), bubbleHighlightColor);
+			batch.setColor(bubbleHighlightColor);
+			batch.draw(region,
+					bubble.position.x - radius * 0.34f - highlightRadius,
+					bubble.position.y + radius * 0.28f - highlightRadius,
+					highlightRadius,
+					highlightRadius,
+					highlightRadius * 2f,
+					highlightRadius * 2f,
+					1f,
+					1f,
+					0f);
 		}
 		batch.setColor(1, 1, 1, 1);
 	}
@@ -240,7 +267,7 @@ public class WaterSplashSystem {
 	public void drawDropletsAndSplats(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
 		if(particles.size == 0)
 			return;
-		TextureRegion dropRegion = textureAtlas.findRegion("BallColor");
+		TextureRegion dropRegion = findParticleCircleRegion(textureAtlas);
 		TextureRegion flatRegion = textureAtlas.findRegion("WhiteSquare");
 		for(SplashParticle particle : particles){
 			if(particle.state == SplashParticleState.RIPPLE)
@@ -865,8 +892,8 @@ public class WaterSplashSystem {
 		float safeMass = Math.max(0.02f, mass);
 		float safeSize = Math.max(0.1f, size);
 		float safeIntensity = Math.max(0f, intensity);
-		return MathUtils.clamp(0.06f + safeSize * 0.026f + safeIntensity * 0.012f
-				+ (float)Math.sqrt(safeMass) * 0.01f, 0.08f, 0.42f);
+		return MathUtils.clamp(0.085f + safeSize * 0.036f + safeIntensity * 0.014f
+				+ (float)Math.sqrt(safeMass) * 0.012f, 0.12f, 0.48f);
 	}
 
 	static float calculateBubbleTrailRate(float totalSpeed, float mass, float size){
@@ -911,6 +938,32 @@ public class WaterSplashSystem {
 					MathUtils.clamp(waterBlue * 0.35f + 0.05f, 0f, 1f),
 					MathUtils.clamp(alpha, 0f, 1f));
 		}
+		return target;
+	}
+
+	static String particleCircleRegionName(){
+		return PARTICLE_CIRCLE_REGION;
+	}
+
+	private static TextureRegion findParticleCircleRegion(TextureAtlas textureAtlas){
+		return textureAtlas == null ? null : textureAtlas.findRegion(PARTICLE_CIRCLE_REGION);
+	}
+
+	private static Color setBubbleCoreColor(Color waterColor, float alpha, Color out){
+		Color target = out == null ? new Color() : out;
+		float waterRed = waterColor == null ? 0f : waterColor.r;
+		float waterGreen = waterColor == null ? 0.45f : waterColor.g;
+		float waterBlue = waterColor == null ? 0.65f : waterColor.b;
+		target.set(MathUtils.clamp(waterRed + 0.04f, 0f, 1f),
+				MathUtils.clamp(waterGreen + 0.09f, 0f, 1f),
+				MathUtils.clamp(waterBlue + 0.12f, 0f, 1f),
+				MathUtils.clamp(alpha, 0f, 1f));
+		return target;
+	}
+
+	private static Color setBubbleHighlightColor(float alpha, Color out){
+		Color target = out == null ? new Color() : out;
+		target.set(0.96f, 1f, 1f, MathUtils.clamp(alpha, 0f, 1f));
 		return target;
 	}
 
@@ -1271,7 +1324,8 @@ public class WaterSplashSystem {
 			float startX = MathUtils.clamp(localX, -halfWidth, halfWidth);
 			float spacing = MathUtils.clamp(0.3f + size * 0.15f + amplitude * 0.14f, sampleSpacing * 1.9f,
 					Math.max(sampleSpacing * 2.4f, halfWidth * 0.35f));
-			float width = MathUtils.clamp(spacing * 0.82f, sampleSpacing * 1.55f, halfWidth * 0.24f);
+			float packetSpacing = spacing * 1.55f;
+			float width = MathUtils.clamp(spacing * 1.64f, sampleSpacing * 3.1f, halfWidth * 0.48f);
 			for(int i = 0; i < waveCount; i++){
 				int direction = i % 2 == 0 ? 1 : -1;
 				int rank = i / 2;
@@ -1280,10 +1334,10 @@ public class WaterSplashSystem {
 				float waveAmplitude = amplitude * (0.52f + waveCount * 0.026f) * falloff;
 				float speed = (TRAVELING_WAVE_BASE_SPEED + amplitude * TRAVELING_WAVE_SPEED_SCALE
 						+ size * 0.08f + rank * 0.035f) * TRAVELING_WAVE_SPEED_MULTIPLIER;
-				float offset = sampleSpacing * 0.6f + spacing * rank;
+				float offset = sampleSpacing * 0.6f + packetSpacing * rank;
 				float centerX = startX + direction * offset;
 				addTravelingWave(new TravelingWave(reflectIntoBounds(centerX, halfWidth), direction, waveAmplitude,
-						spacing * 2f, speed, width, -MathUtils.PI * 0.5f, polarity));
+						packetSpacing * 2f, speed, width, -MathUtils.PI * 0.5f, polarity));
 			}
 		}
 

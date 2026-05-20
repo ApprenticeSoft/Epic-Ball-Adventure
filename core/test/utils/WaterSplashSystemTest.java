@@ -180,6 +180,16 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void bubbleRadiusHasReadableMinimum(){
+		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(0.02f, 0.1f, 0f) >= 0.12f);
+	}
+
+	@Test
+	public void waterParticlesUsePlainCircleRegion(){
+		assertEquals("PlainCircle", WaterSplashSystem.particleCircleRegionName());
+	}
+
+	@Test
 	public void bubbleTrailRequiresMovementAndScalesWithBody(){
 		assertEquals(0f, WaterSplashSystem.calculateBubbleTrailRate(0.2f, 3f, 3f), 0.0001f);
 		float lightRate = WaterSplashSystem.calculateBubbleTrailRate(1.2f, 0.05f, 0.6f);
@@ -231,6 +241,16 @@ public class WaterSplashSystemTest {
 		WaterSplashSystem.TravelingWave wave = simulation.travelingWaves.first();
 		float previousSpeed = 1.85f + 0.5f * 1.05f + 1f * 0.08f;
 		assertEquals(previousSpeed * 2f, wave.speed, 0.0001f);
+	}
+
+	@Test
+	public void ballSizedImpactCreatesBroadTravelingWaves(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f);
+
+		assertTrue(simulation.travelingWaves.first().width >= 0.95f);
 	}
 
 	@Test
@@ -304,6 +324,13 @@ public class WaterSplashSystemTest {
 		assertEquals(0f, WaterSplashSystem.calculateRefractionWaveStrength(0f, 0f), 0.0001f);
 		assertTrue(WaterSplashSystem.calculateRefractionWaveStrength(0.4f, 0.2f) > 0.25f);
 		assertEquals(1f, WaterSplashSystem.calculateRefractionWaveStrength(4f, 4f), 0.0001f);
+	}
+
+	@Test
+	public void calmRefractionKeepsVisibleDistortion(){
+		assertTrue(WaterRefractionRenderer.calculateDistortionPixels(0f) >= 5.5f);
+		assertTrue(WaterRefractionRenderer.calculateDistortionPixels(0.6f)
+				> WaterRefractionRenderer.calculateDistortionPixels(0f));
 	}
 
 	@Test
