@@ -2,4 +2,9 @@
 <!DOCTYPE module PUBLIC "-//Google Inc.//DTD Google Web Toolkit trunk//EN" "http://google-web-toolkit.googlecode.com/svn/trunk/distro-source/core/src/gwt-module.dtd">
 <module>
 	<source path="com/one/button/jam" />
+	<source path="screen" />
+	<source path="utils" />
+	<source path="editor" />
+	<source path="bodies" />
+	<source path="Box2DUtils" />
 </module>

@@ -9,31 +9,31 @@ import com.badlogic.gdx.physics.box2d.BodyDef.BodyType;
 import com.one.button.jam.Couleurs;
 
 public class ObstacleRotatif extends Obstacle{
-	
+
 	private float vitesse = 90;
 
 	public ObstacleRotatif(World world, Camera camera, MapObject rectangleObject, Couleurs couleurs) {
 		super(world, camera, rectangleObject, couleurs);
-		
+
 		//Couleur
-		couleur = couleurs.getCouleurLéger();
-		
+		couleur = couleurs.getCouleurLeger();
+
 		//Vitesse de rotation
 		if(rectangleObject.getProperties().get("Speed") != null)
-			vitesse = Float.parseFloat((String) rectangleObject.getProperties().get("Speed"));
-		
+			vitesse = Float.parseFloat(rectangleObject.getProperties().get("Speed").toString());
+
 		body.setFixedRotation(false);
 		body.setAngularVelocity(vitesse*MathUtils.degreesToRadians);
 	}
-	
+
 	@Override
 	public BodyType getBodyType(){
 		return BodyType.KinematicBody;
 	}
-	
+
 	@Override
 	public Color getCouleur(){
-		return couleurs.getCouleurLéger();
+		return couleurs.getCouleurLeger();
 	}
 
 }

@@ -68,3 +68,8 @@ build/
 ## OS Specific
 .DS_Store
 Thumbs.db
+
+## Node / Playwright
+node_modules/
+test-results/
+playwright-report/

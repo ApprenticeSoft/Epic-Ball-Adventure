@@ -12,7 +12,7 @@ public class PolygonIntersector {
 
 	/**
 	 * Returns true if the given point is inside the segment.
-	 * 
+	 *
 	 * @param point The point to check
 	 * @param start Segment's first point
 	 * @param end Segment's last point
@@ -25,7 +25,7 @@ public class PolygonIntersector {
 
 	/**
 	 * Returns true if the given point is inside the segment.
-	 * 
+	 *
 	 * @param pointX X coordinate of the point
 	 * @param pointY Y coordinate of the point
 	 * @param startX X coordinate of the segment's first point
@@ -52,7 +52,7 @@ public class PolygonIntersector {
 	public static Vector2 getEdgesIntersection(Vector2 firstEdgeStartPoint,
 			Vector2 firstEdgeEndPoint, Vector2 secondEdgeStartPoint,
 			Vector2 secondEdgeEndPoint) {
-		
+
 		Vector2 firstDirectionPoint = new Vector2(firstEdgeStartPoint.x
 				- firstEdgeEndPoint.x, firstEdgeStartPoint.y
 				- firstEdgeEndPoint.y);
@@ -79,11 +79,11 @@ public class PolygonIntersector {
 	public static Polygon intersectPolygons(Polygon subjectPolygon, Polygon clipPolygon) {
 		return intersectPolygons(subjectPolygon.getVertices(), clipPolygon.getVertices());
 	}
-	
+
 	public static Polygon intersectPolygons(float[] subjectVertices, float[] clipVertices) {
 		return null;
 	}
-	
+
 	public static List<Vector2> clipPolygons(List<Vector2> subjectPolygon,
 			List<Vector2> clipPolygon) {
 		List<Vector2> clippedPolygonVertices = new ArrayList<Vector2>(

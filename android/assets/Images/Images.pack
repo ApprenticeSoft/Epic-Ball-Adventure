@@ -1,7 +1,7 @@
 
-Images.png
+ImagesWaterBubbles.png
 format: RGBA8888
-filter: MipMapLinearNearest,MipMapLinearNearest
+filter: Linear,Linear
 repeat: none
 Ball
   rotate: false
@@ -59,6 +59,20 @@ Exit_background
   xy: 352, 22
   size: 30, 30
   orig: 30, 30
+  offset: 0, 0
+  index: -1
+PlainCircle
+  rotate: false
+  xy: 384, 22
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+BubbleRing
+  rotate: false
+  xy: 418, 22
+  size: 32, 32
+  orig: 32, 32
   offset: 0, 0
   index: -1
 WhiteSquare

@@ -7,18 +7,18 @@ import com.badlogic.gdx.physics.box2d.World;
 import com.badlogic.gdx.physics.box2d.BodyDef.BodyType;
 import com.one.button.jam.Couleurs;
 
-public class ObstacleLéger extends Obstacle{
+public class ObstacleLeger extends Obstacle{
 
-	public ObstacleLéger(World world, Camera camera, RectangleMapObject rectangleObject, Couleurs couleurs){
+	public ObstacleLeger(World world, Camera camera, RectangleMapObject rectangleObject, Couleurs couleurs){
 		super(world, camera, rectangleObject, couleurs);
-		
+
 		body.setUserData("Light");
 		body.getFixtureList().get(0).setUserData("Light");
 		body.getFixtureList().get(0).setRestitution(0.45f);
-		
+
 		//Couleur
-		couleur = couleurs.getCouleurLéger();
-		
+		couleur = couleurs.getCouleurLeger();
+
 		//Masse
 		if(rectangleObject.getProperties().get("Weight") != null){
 			body.getFixtureList().get(0).setDensity(
@@ -33,21 +33,19 @@ public class ObstacleLéger extends Obstacle{
 			body.resetMassData();
 		}
 	}
-	
+
 	@Override
 	public BodyType getBodyType(){
 		return BodyType.DynamicBody;
 	}
-	
+
 	@Override
 	public Color getCouleur(){
-		return couleurs.getCouleurLéger();
+		return couleurs.getCouleurLeger();
 	}
-	
+
 	@Override
 	public void initiate(){
-		body.setLinearVelocity(0, 0);
-		body.setAngularVelocity(0);
-		body.setTransform(initialPosition, angle);
+		resetBodyToInitial();
 	}
 }
