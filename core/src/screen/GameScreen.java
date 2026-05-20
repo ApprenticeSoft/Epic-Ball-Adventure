@@ -318,7 +318,7 @@ public class GameScreen extends InputAdapter implements Screen{
 					if(obstacle.body.getFixtureList().get(0) == fixtureA){
 						Eau eau = (Eau) obstacle;
 						eau.buoyancyController.addBody(fixtureB);
-						waterSplashSystem.splash(eau, fixtureB, contact);
+						waterSplashSystem.enterWater(eau, fixtureB, contact);
 
 						if(fixtureB.getUserData().equals("Ball")){
 							System.out.println("Balle à l'eau !");
@@ -334,7 +334,7 @@ public class GameScreen extends InputAdapter implements Screen{
 					if(obstacle.body.getFixtureList().get(0) == fixtureB){
 						Eau eau = (Eau) obstacle;
 						eau.buoyancyController.addBody(fixtureA);
-						waterSplashSystem.splash(eau, fixtureA, contact);
+						waterSplashSystem.enterWater(eau, fixtureA, contact);
 
 						if(fixtureA.getUserData().equals("Ball")){
 							System.out.println("Balle à l'eau !");
@@ -359,6 +359,7 @@ public class GameScreen extends InputAdapter implements Screen{
 					if(obstacle.body.getFixtureList().get(0) == FixtureA){
 						Eau eau = (Eau) obstacle;
 						eau.buoyancyController.removeBody(FixtureB);
+						waterSplashSystem.exitWater(eau, FixtureB);
 					}
 				}
 				}
@@ -367,6 +368,7 @@ public class GameScreen extends InputAdapter implements Screen{
 					if(obstacle.body.getFixtureList().get(0) == FixtureB){
 						Eau eau = (Eau) obstacle;
 						eau.buoyancyController.removeBody(FixtureA);
+						waterSplashSystem.exitWater(eau, FixtureA);
 					}
 				}
 				}
@@ -509,6 +511,11 @@ public class GameScreen extends InputAdapter implements Screen{
 		}
 
 		if(waterSplashSystem != null){
+			game.batch.setProjectionMatrix(camera.combined);
+			game.batch.begin();
+			waterSplashSystem.drawBubbles(game.batch, textureAtlas, couleurs.getCouleurEau());
+			game.batch.end();
+
 			game.batch.setProjectionMatrix(camera.combined);
 			game.batch.begin();
 			waterSplashSystem.drawRipples(game.batch, textureAtlas, couleurs.getCouleurEau());

@@ -161,6 +161,56 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void bubblePlumeScalesWithImpactEnergy(){
+		int lightCount = WaterSplashSystem.calculateBubblePlumeCount(2f, 2f, 0.05f, 0.6f, 1f);
+		int heavyCount = WaterSplashSystem.calculateBubblePlumeCount(24f, 28f, 18f, 4f, 18f);
+
+		assertTrue(heavyCount > lightCount * 4);
+		assertEquals(79, heavyCount);
+		assertTrue(WaterSplashSystem.calculateBubblePlumeSpread(24f, 28f, 18f, 4f, 18f)
+				> WaterSplashSystem.calculateBubblePlumeSpread(2f, 2f, 0.05f, 0.6f, 1f) * 2f);
+		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(18f, 4f, 18f)
+				> WaterSplashSystem.calculateBubbleRadiusBase(0.05f, 0.6f, 1f));
+	}
+
+	@Test
+	public void bubblePlumeCountIsClamped(){
+		assertEquals(6, WaterSplashSystem.calculateBubblePlumeCount(0f, 0f, 0f, 0f, 0f));
+		assertEquals(80, WaterSplashSystem.calculateBubblePlumeCount(100f, 100f, 100f, 100f, 100f));
+	}
+
+	@Test
+	public void bubbleTrailRequiresMovementAndScalesWithBody(){
+		assertEquals(0f, WaterSplashSystem.calculateBubbleTrailRate(0.2f, 3f, 3f), 0.0001f);
+		float lightRate = WaterSplashSystem.calculateBubbleTrailRate(1.2f, 0.05f, 0.6f);
+		float heavyRate = WaterSplashSystem.calculateBubbleTrailRate(8f, 12f, 3f);
+
+		assertTrue(lightRate > 0f);
+		assertTrue(heavyRate > lightRate * 3f);
+	}
+
+	@Test
+	public void bubbleSurfaceFadeOnlyDropsNearSurface(){
+		assertEquals(1f, WaterSplashSystem.calculateBubbleSurfaceFade(2f, 0.08f), 0.0001f);
+		assertTrue(WaterSplashSystem.calculateBubbleSurfaceFade(0.04f, 0.08f) < 0.25f);
+		assertTrue(WaterSplashSystem.bubbleReachedSurface(0.98f, 1f, 0.08f));
+		assertFalse(WaterSplashSystem.bubbleReachedSurface(0.6f, 1f, 0.08f));
+	}
+
+	@Test
+	public void airBubbleRisesAndGrows(){
+		WaterSplashSystem.AirBubble bubble = WaterSplashSystem.AirBubble.create(null,
+				new Vector2(0f, 0f), new Vector2(0f, 0.4f), 0.08f, 0.5f, 4f);
+		float initialRadius = bubble.renderRadius();
+
+		bubble.update(0.5f);
+
+		assertTrue(bubble.position.y > 0.2f);
+		assertTrue(bubble.renderRadius() > initialRadius);
+		assertTrue(bubble.renderAlpha(1f) > 0f);
+	}
+
+	@Test
 	public void visibleWaveAlphaIsReadableAndCappedByWaterAlpha(){
 		WaterSplashSystem.TravelingWave wave =
 				new WaterSplashSystem.TravelingWave(0f, 1, 0.35f, 0.5f, 2f, 0.4f, 0f);
