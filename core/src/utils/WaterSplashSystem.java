@@ -376,8 +376,7 @@ public class WaterSplashSystem {
 	private boolean shouldRemoveBubble(AirBubble bubble){
 		if(bubble == null || bubble.water == null || bubble.age >= bubble.lifetime)
 			return true;
-		bubbleLocalPoint.set(bubble.position);
-		bubble.water.body.getLocalPoint(bubbleLocalPoint);
+		bubbleLocalPoint.set(bubble.water.body.getLocalPoint(bubble.position));
 		float surfaceY = surfaceLocalY(bubble.water, bubbleLocalPoint.x);
 		if(bubbleReachedSurface(bubbleLocalPoint.y, surfaceY, bubble.radius))
 			return true;
@@ -404,7 +403,7 @@ public class WaterSplashSystem {
 					surfaceY - BUBBLE_SURFACE_MARGIN);
 			water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY));
 			float radius = radiusBase * MathUtils.random(0.55f, 1.35f);
-			float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.28f, 0.8f), waterAlpha);
+			float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.55f, 1f), waterAlpha);
 			Vector2 velocity = new Vector2(impact.surfaceNormal).scl(MathUtils.random(0.5f, 1.8f)
 					+ impact.downwardSpeed * 0.03f)
 					.mulAdd(new Vector2(impact.surfaceNormal.y, -impact.surfaceNormal.x),
@@ -419,8 +418,7 @@ public class WaterSplashSystem {
 		if(water == null || fixture == null)
 			return;
 		Body body = fixture.getBody();
-		bubbleLocalPoint.set(body.getWorldCenter());
-		water.body.getLocalPoint(bubbleLocalPoint);
+		bubbleLocalPoint.set(water.body.getLocalPoint(body.getWorldCenter()));
 		float localX = MathUtils.clamp(bubbleLocalPoint.x + MathUtils.random(-size * 0.22f, size * 0.22f),
 				-water.getSurfaceHalfWidth() + BUBBLE_SURFACE_MARGIN,
 				water.getSurfaceHalfWidth() - BUBBLE_SURFACE_MARGIN);
@@ -433,7 +431,7 @@ public class WaterSplashSystem {
 		water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY));
 		float radius = calculateBubbleRadiusBase(mass, size, speed * 0.35f) * MathUtils.random(0.48f, 1.05f);
 		float waterAlpha = waterAlpha(water);
-		float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.22f, 0.58f), waterAlpha);
+		float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.4f, 0.82f), waterAlpha);
 		Vector2 normal = water.getSurfaceNormal();
 		Vector2 tangent = new Vector2(normal.y, -normal.x);
 		if(tangent.isZero())
@@ -667,8 +665,7 @@ public class WaterSplashSystem {
 	private float surfaceFadeForBubble(AirBubble bubble){
 		if(bubble == null || bubble.water == null)
 			return 0f;
-		bubbleLocalPoint.set(bubble.position);
-		bubble.water.body.getLocalPoint(bubbleLocalPoint);
+		bubbleLocalPoint.set(bubble.water.body.getLocalPoint(bubble.position));
 		float depth = surfaceLocalY(bubble.water, bubbleLocalPoint.x) - bubbleLocalPoint.y;
 		return calculateBubbleSurfaceFade(depth, bubble.radius);
 	}
@@ -868,8 +865,8 @@ public class WaterSplashSystem {
 		float safeMass = Math.max(0.02f, mass);
 		float safeSize = Math.max(0.1f, size);
 		float safeIntensity = Math.max(0f, intensity);
-		return MathUtils.clamp(0.028f + safeSize * 0.014f + safeIntensity * 0.006f
-				+ (float)Math.sqrt(safeMass) * 0.006f, 0.035f, 0.24f);
+		return MathUtils.clamp(0.06f + safeSize * 0.026f + safeIntensity * 0.012f
+				+ (float)Math.sqrt(safeMass) * 0.01f, 0.08f, 0.42f);
 	}
 
 	static float calculateBubbleTrailRate(float totalSpeed, float mass, float size){
