@@ -17,6 +17,7 @@ import com.badlogic.gdx.utils.Array;
 
 public class WaterSplashSystem {
 	private static final String PARTICLE_CIRCLE_REGION = "PlainCircle";
+	private static final String BUBBLE_RING_REGION = "BubbleRing";
 	private static final int MAX_PARTICLES = 320;
 	private static final float VISUAL_GRAVITY = 34f;
 	private static final float MIN_SPLASH_SPEED = 1.2f;
@@ -87,7 +88,7 @@ public class WaterSplashSystem {
 	private final Vector2 bubbleWorldPoint = new Vector2();
 	private final Color waveColor = new Color();
 	private final Color bubbleColor = new Color();
-	private final Color bubbleCoreColor = new Color();
+	private final Color bubbleShadowColor = new Color();
 	private final Color bubbleHighlightColor = new Color();
 	private final RippleSegment[] rippleSegments = new RippleSegment[]{
 			new RippleSegment(), new RippleSegment(), new RippleSegment()
@@ -211,10 +212,15 @@ public class WaterSplashSystem {
 	}
 
 	public void drawBubbles(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
+		drawBubblesBehindWater(batch, textureAtlas, waterColor);
+	}
+
+	public void drawBubblesBehindWater(SpriteBatch batch, TextureAtlas textureAtlas, Color waterColor){
 		if(bubbles.size == 0)
 			return;
-		TextureRegion region = findParticleCircleRegion(textureAtlas);
-		if(region == null)
+		TextureRegion ringRegion = findBubbleRingRegion(textureAtlas);
+		TextureRegion highlightRegion = findParticleCircleRegion(textureAtlas);
+		if(ringRegion == null)
 			return;
 		float waterAlpha = waterAlpha(waterColor);
 		for(AirBubble bubble : bubbles){
@@ -222,9 +228,22 @@ public class WaterSplashSystem {
 			if(alpha <= 0.005f)
 				continue;
 			float radius = bubble.renderRadius();
-			setBubbleColor(waterColor, alpha, bubbleColor);
+			float shadowRadius = radius * 1.08f;
+			setBubbleShadowColor(waterColor, capToWaterAlpha(alpha * 0.82f, waterAlpha), bubbleShadowColor);
+			batch.setColor(bubbleShadowColor);
+			batch.draw(ringRegion,
+					bubble.position.x - shadowRadius,
+					bubble.position.y - shadowRadius,
+					shadowRadius,
+					shadowRadius,
+					shadowRadius * 2f,
+					shadowRadius * 2f,
+					1f,
+					1f,
+					0f);
+			setBubbleRingColor(alpha, bubbleColor);
 			batch.setColor(bubbleColor);
-			batch.draw(region,
+			batch.draw(ringRegion,
 					bubble.position.x - radius,
 					bubble.position.y - radius,
 					radius,
@@ -234,23 +253,25 @@ public class WaterSplashSystem {
 					1f,
 					1f,
 					0f);
-			float coreRadius = radius * 0.72f;
-			setBubbleCoreColor(waterColor, capToWaterAlpha(alpha * 0.58f, waterAlpha), bubbleCoreColor);
-			batch.setColor(bubbleCoreColor);
-			batch.draw(region,
-					bubble.position.x - coreRadius,
-					bubble.position.y - coreRadius,
-					coreRadius,
-					coreRadius,
-					coreRadius * 2f,
-					coreRadius * 2f,
+			float innerRadius = radius * 0.78f;
+			setBubbleRingColor(capToWaterAlpha(alpha * 0.66f, waterAlpha), bubbleColor);
+			batch.setColor(bubbleColor);
+			batch.draw(ringRegion,
+					bubble.position.x - innerRadius,
+					bubble.position.y - innerRadius,
+					innerRadius,
+					innerRadius,
+					innerRadius * 2f,
+					innerRadius * 2f,
 					1f,
 					1f,
 					0f);
+			if(highlightRegion == null)
+				continue;
 			float highlightRadius = radius * 0.26f;
 			setBubbleHighlightColor(capToWaterAlpha(alpha * 0.72f, waterAlpha), bubbleHighlightColor);
 			batch.setColor(bubbleHighlightColor);
-			batch.draw(region,
+			batch.draw(highlightRegion,
 					bubble.position.x - radius * 0.34f - highlightRadius,
 					bubble.position.y + radius * 0.28f - highlightRadius,
 					highlightRadius,
@@ -296,6 +317,30 @@ public class WaterSplashSystem {
 
 	int getSubmergedFixtureCount(){
 		return submergedFixtures.size;
+	}
+
+	public void spawnDebugBubbleProbe(){
+		if(waters == null || waters.size == 0)
+			return;
+		Eau water = waters.first();
+		float waterAlpha = waterAlpha(water);
+		int count = 14;
+		for(int i = 0; i < count; i++){
+			float ratio = count <= 1 ? 0.5f : i / (float)(count - 1);
+			float localX = MathUtils.lerp(-water.getSurfaceHalfWidth() * 0.38f,
+					water.getSurfaceHalfWidth() * 0.38f, ratio);
+			float surfaceY = surfaceLocalY(water, localX);
+			float radius = 0.42f + (i % 4) * 0.075f;
+			float depth = minimumBubblePlumeDepth(radius) + 0.16f + (i % 3) * 0.16f;
+			float localY = MathUtils.clamp(surfaceY - depth, -water.height + BUBBLE_SURFACE_MARGIN,
+					surfaceY - BUBBLE_SURFACE_MARGIN);
+			bubbleWorldPoint.set(water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY)));
+			Vector2 velocity = new Vector2(MathUtils.random(-0.08f, 0.08f), MathUtils.random(0.22f, 0.48f));
+			bubbles.add(AirBubble.create(water, bubbleWorldPoint, velocity, radius,
+					capToWaterAlpha(waterAlpha * 0.96f, waterAlpha), 7f));
+		}
+		trimBubbles();
+		DebugConfig.log("water bubble probe count=" + count + " total=" + bubbles.size);
 	}
 
 	private void spawnImpact(WaterImpact impact, Eau water){
@@ -420,25 +465,48 @@ public class WaterSplashSystem {
 				impact.intensity);
 		float centerLocalX = water.getSurfaceLocalX(impact.point);
 		float velocitySide = impact.velocity.dot(new Vector2(impact.surfaceNormal.y, -impact.surfaceNormal.x));
+		float firstLocalX = 0f;
+		float firstLocalY = 0f;
+		float firstSurfaceY = 0f;
+		float firstRadius = 0f;
+		float firstAlpha = 0f;
+		int startBubbleCount = bubbles.size;
 		for(int i = 0; i < bubbleCount; i++){
 			float localX = MathUtils.clamp(centerLocalX + MathUtils.random(-spread, spread) * 0.45f,
 					-water.getSurfaceHalfWidth() + BUBBLE_SURFACE_MARGIN,
 					water.getSurfaceHalfWidth() - BUBBLE_SURFACE_MARGIN);
 			float surfaceY = surfaceLocalY(water, localX);
-			float depth = MathUtils.random(0.18f, Math.max(0.24f, impact.size * 0.52f + impact.intensity * 0.08f));
+			float minimumDepth = minimumBubblePlumeDepth(radiusBase);
+			float maximumDepth = Math.max(minimumDepth + 0.08f, impact.size * 0.65f + impact.intensity * 0.11f);
+			float depth = MathUtils.random(minimumDepth, maximumDepth);
 			float localY = MathUtils.clamp(surfaceY - depth, -water.height + BUBBLE_SURFACE_MARGIN,
 					surfaceY - BUBBLE_SURFACE_MARGIN);
-			water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY));
+			bubbleWorldPoint.set(water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY)));
 			float radius = radiusBase * MathUtils.random(0.55f, 1.35f);
-			float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.55f, 1f), waterAlpha);
+			float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.85f, 1f), waterAlpha);
 			Vector2 velocity = new Vector2(impact.surfaceNormal).scl(MathUtils.random(0.5f, 1.8f)
 					+ impact.downwardSpeed * 0.03f)
 					.mulAdd(new Vector2(impact.surfaceNormal.y, -impact.surfaceNormal.x),
 							MathUtils.random(-0.9f, 0.9f) + velocitySide * 0.025f);
 			bubbles.add(AirBubble.create(water, bubbleWorldPoint, velocity, radius, alpha,
 					MathUtils.random(3.2f, 6.8f)));
+			if(i == 0){
+				firstLocalX = localX;
+				firstLocalY = localY;
+				firstSurfaceY = surfaceY;
+				firstRadius = radius;
+				firstAlpha = alpha;
+			}
 		}
 		trimBubbles();
+		if(DebugConfig.isEnabled() && bubbles.size > startBubbleCount){
+			DebugConfig.log("water bubble plume count=" + (bubbles.size - startBubbleCount)
+					+ " total=" + bubbles.size
+					+ " local=(" + number(firstLocalX) + "," + number(firstLocalY) + ")"
+					+ " surfaceY=" + number(firstSurfaceY)
+					+ " radius=" + number(firstRadius)
+					+ " alpha=" + number(firstAlpha));
+		}
 	}
 
 	private void spawnTrailBubble(Eau water, Fixture fixture, float speed, float mass, float size){
@@ -450,15 +518,15 @@ public class WaterSplashSystem {
 				-water.getSurfaceHalfWidth() + BUBBLE_SURFACE_MARGIN,
 				water.getSurfaceHalfWidth() - BUBBLE_SURFACE_MARGIN);
 		float surfaceY = surfaceLocalY(water, localX);
-		float maxY = surfaceY - Math.max(0.16f, size * 0.08f);
+		float radius = calculateBubbleRadiusBase(mass, size, speed * 0.35f) * MathUtils.random(0.48f, 1.05f);
+		float maxY = surfaceY - Math.max(Math.max(0.18f, size * 0.08f), bubbleRemovalClearance(radius) + 0.04f);
 		if(maxY <= -water.height + BUBBLE_SURFACE_MARGIN)
 			return;
 		float localY = MathUtils.clamp(bubbleLocalPoint.y + MathUtils.random(-size * 0.16f, size * 0.16f),
 				-water.height + BUBBLE_SURFACE_MARGIN, maxY);
-		water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY));
-		float radius = calculateBubbleRadiusBase(mass, size, speed * 0.35f) * MathUtils.random(0.48f, 1.05f);
+		bubbleWorldPoint.set(water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY)));
 		float waterAlpha = waterAlpha(water);
-		float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.4f, 0.82f), waterAlpha);
+		float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.65f, 0.9f), waterAlpha);
 		Vector2 normal = water.getSurfaceNormal();
 		Vector2 tangent = new Vector2(normal.y, -normal.x);
 		if(tangent.isZero())
@@ -892,8 +960,12 @@ public class WaterSplashSystem {
 		float safeMass = Math.max(0.02f, mass);
 		float safeSize = Math.max(0.1f, size);
 		float safeIntensity = Math.max(0f, intensity);
-		return MathUtils.clamp(0.085f + safeSize * 0.036f + safeIntensity * 0.014f
-				+ (float)Math.sqrt(safeMass) * 0.012f, 0.12f, 0.48f);
+		return MathUtils.clamp(0.12f + safeSize * 0.048f + safeIntensity * 0.018f
+				+ (float)Math.sqrt(safeMass) * 0.016f, 0.18f, 0.62f);
+	}
+
+	static float minimumBubblePlumeDepth(float radiusBase){
+		return Math.max(0.46f, Math.max(0f, radiusBase) * 1.05f + BUBBLE_SURFACE_MARGIN);
 	}
 
 	static float calculateBubbleTrailRate(float totalSpeed, float mass, float size){
@@ -907,12 +979,17 @@ public class WaterSplashSystem {
 	}
 
 	static boolean bubbleReachedSurface(float localY, float surfaceY, float radius){
-		return localY + Math.max(0f, radius) * 0.35f >= surfaceY - BUBBLE_SURFACE_MARGIN;
+		return localY + bubbleRemovalClearance(radius) >= surfaceY - BUBBLE_SURFACE_MARGIN;
 	}
 
 	static float calculateBubbleSurfaceFade(float depth, float radius){
-		float fadeDepth = Math.max(0.16f, Math.max(0.01f, radius) * 5f);
-		return smoothStep(MathUtils.clamp(depth / fadeDepth, 0f, 1f));
+		float fadeDepth = Math.max(0.1f, Math.max(0.01f, radius) * 1.25f);
+		float surfaceClearance = Math.max(0f, depth - BUBBLE_SURFACE_MARGIN);
+		return smoothStep(MathUtils.clamp(surfaceClearance / fadeDepth, 0f, 1f));
+	}
+
+	static float bubbleRemovalClearance(float radius){
+		return Math.max(0f, radius) * 0.35f;
 	}
 
 	static float calculateWaveRenderAlpha(TravelingWave wave, float waterAlpha){
@@ -945,18 +1022,35 @@ public class WaterSplashSystem {
 		return PARTICLE_CIRCLE_REGION;
 	}
 
+	static String bubbleRingRegionName(){
+		return BUBBLE_RING_REGION;
+	}
+
 	private static TextureRegion findParticleCircleRegion(TextureAtlas textureAtlas){
 		return textureAtlas == null ? null : textureAtlas.findRegion(PARTICLE_CIRCLE_REGION);
 	}
 
-	private static Color setBubbleCoreColor(Color waterColor, float alpha, Color out){
+	private static TextureRegion findBubbleRingRegion(TextureAtlas textureAtlas){
+		if(textureAtlas == null)
+			return null;
+		TextureRegion region = textureAtlas.findRegion(BUBBLE_RING_REGION);
+		return region == null ? textureAtlas.findRegion(PARTICLE_CIRCLE_REGION) : region;
+	}
+
+	static Color setBubbleRingColor(float alpha, Color out){
+		Color target = out == null ? new Color() : out;
+		target.set(0.96f, 1f, 1f, MathUtils.clamp(alpha, 0f, 1f));
+		return target;
+	}
+
+	static Color setBubbleShadowColor(Color waterColor, float alpha, Color out){
 		Color target = out == null ? new Color() : out;
 		float waterRed = waterColor == null ? 0f : waterColor.r;
 		float waterGreen = waterColor == null ? 0.45f : waterColor.g;
 		float waterBlue = waterColor == null ? 0.65f : waterColor.b;
-		target.set(MathUtils.clamp(waterRed + 0.04f, 0f, 1f),
-				MathUtils.clamp(waterGreen + 0.09f, 0f, 1f),
-				MathUtils.clamp(waterBlue + 0.12f, 0f, 1f),
+		target.set(MathUtils.clamp(waterRed * 0.12f, 0f, 1f),
+				MathUtils.clamp(waterGreen * 0.32f, 0f, 1f),
+				MathUtils.clamp(waterBlue * 0.42f + 0.05f, 0f, 1f),
 				MathUtils.clamp(alpha, 0f, 1f));
 		return target;
 	}

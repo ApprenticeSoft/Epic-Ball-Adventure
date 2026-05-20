@@ -174,6 +174,8 @@ public class GameScreen extends InputAdapter implements Screen{
 				+ " springs=" + lecteurCarte.springs.size
 				+ " water=" + lecteurCarte.waters.size);
         waterSplashSystem = new WaterSplashSystem(world, lecteurCarte.waters);
+		if(DebugConfig.waterBubbleProbe)
+			waterSplashSystem.spawnDebugBubbleProbe();
 
         /*
          * Label restart
@@ -494,7 +496,7 @@ public class GameScreen extends InputAdapter implements Screen{
         tiledMapRenderer.setView(camera);
 		boolean refractionReady = allowWaterRefraction && captureWaterRefractionScene();
 
-		drawGameplaySceneWithoutWater();
+		drawGameplaySceneWithoutWater(!refractionReady);
 
 		if(waterSplashSystem != null){
 			polyBatch.setProjectionMatrix(camera.combined);
@@ -529,9 +531,15 @@ public class GameScreen extends InputAdapter implements Screen{
 	}
 
 	private void drawGameplaySceneWithoutWater(){
+		drawGameplaySceneWithoutWater(false);
+	}
+
+	private void drawGameplaySceneWithoutWater(boolean drawBubblesBehindWater){
 		game.batch.setProjectionMatrix(camera.combined);
 		game.batch.begin();
 		lecteurCarte.drawBehindWater(game.batch, textureAtlas);
+		if(drawBubblesBehindWater && waterSplashSystem != null)
+			waterSplashSystem.drawBubblesBehindWater(game.batch, textureAtlas, couleurs.getCouleurEau());
 		lecteurCarte.drawWaterOccluders(game.batch, textureAtlas);
 		game.batch.end();
 
@@ -548,7 +556,7 @@ public class GameScreen extends InputAdapter implements Screen{
 		if(!waterRefractionRenderer.beginCapture(couleurs.getCouleurFond()))
 			return false;
 
-		drawGameplaySceneWithoutWater();
+		drawGameplaySceneWithoutWater(true);
 
 		waterRefractionRenderer.endCapture();
 		return true;

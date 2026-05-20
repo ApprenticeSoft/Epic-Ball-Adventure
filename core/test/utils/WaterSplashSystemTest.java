@@ -181,12 +181,23 @@ public class WaterSplashSystemTest {
 
 	@Test
 	public void bubbleRadiusHasReadableMinimum(){
-		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(0.02f, 0.1f, 0f) >= 0.12f);
+		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(0.02f, 0.1f, 0f) >= 0.18f);
 	}
 
 	@Test
 	public void waterParticlesUsePlainCircleRegion(){
 		assertEquals("PlainCircle", WaterSplashSystem.particleCircleRegionName());
+		assertEquals("BubbleRing", WaterSplashSystem.bubbleRingRegionName());
+	}
+
+	@Test
+	public void bubblePlumeDepthAvoidsImmediateSurfaceRemoval(){
+		float radiusBase = 0.48f;
+		float largestSpawnedRadius = radiusBase * 1.35f;
+		float surfaceY = 1f;
+		float localY = surfaceY - WaterSplashSystem.minimumBubblePlumeDepth(radiusBase);
+
+		assertFalse(WaterSplashSystem.bubbleReachedSurface(localY, surfaceY, largestSpawnedRadius));
 	}
 
 	@Test
@@ -203,8 +214,26 @@ public class WaterSplashSystemTest {
 	public void bubbleSurfaceFadeOnlyDropsNearSurface(){
 		assertEquals(1f, WaterSplashSystem.calculateBubbleSurfaceFade(2f, 0.08f), 0.0001f);
 		assertTrue(WaterSplashSystem.calculateBubbleSurfaceFade(0.04f, 0.08f) < 0.25f);
+		assertTrue(WaterSplashSystem.calculateBubbleSurfaceFade(0.22f, 0.14f) > 0.9f);
 		assertTrue(WaterSplashSystem.bubbleReachedSurface(0.98f, 1f, 0.08f));
 		assertFalse(WaterSplashSystem.bubbleReachedSurface(0.6f, 1f, 0.08f));
+	}
+
+	@Test
+	public void bubbleRingColorIsBrightAndAlphaCappedByCaller(){
+		Color ring = WaterSplashSystem.setBubbleRingColor(
+				WaterSplashSystem.capToWaterAlpha(0.9f, 0.45f), new Color());
+		Color shadow = WaterSplashSystem.setBubbleShadowColor(
+				new Color(0f, 0.55f, 0.35f, 0.55f),
+				WaterSplashSystem.capToWaterAlpha(0.8f, 0.45f), new Color());
+
+		assertTrue(ring.r > 0.9f);
+		assertEquals(1f, ring.g, 0.0001f);
+		assertEquals(1f, ring.b, 0.0001f);
+		assertEquals(0.45f, ring.a, 0.0001f);
+		assertTrue(shadow.r < ring.r);
+		assertTrue(shadow.g < ring.g);
+		assertEquals(0.45f, shadow.a, 0.0001f);
 	}
 
 	@Test

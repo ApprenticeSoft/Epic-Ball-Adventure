@@ -68,6 +68,13 @@ PlainCircle
   orig: 32, 32
   offset: 0, 0
   index: -1
+BubbleRing
+  rotate: false
+  xy: 418, 22
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
 WhiteSquare
   rotate: false
   xy: 2, 2

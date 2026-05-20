@@ -7,6 +7,7 @@ public final class DebugConfig {
 	public static boolean autoAdvanceLevels;
 	public static boolean showRestartOverlay;
 	public static boolean startEditor;
+	public static boolean waterBubbleProbe;
 	public static float autoAdvanceDelay = 0.35f;
 	public static int startLevel = 1;
 
@@ -31,6 +32,7 @@ public final class DebugConfig {
 		autoAdvanceLevels = false;
 		showRestartOverlay = false;
 		startEditor = false;
+		waterBubbleProbe = false;
 		autoAdvanceDelay = 0.35f;
 		startLevel = 1;
 	}

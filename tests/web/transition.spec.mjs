@@ -6,7 +6,31 @@ test('web entrypoint uses the current bundle cache token', async ({ page }) => {
 
   const scriptSource = await page.locator('script[src*="html.nocache.js"]').getAttribute('src');
 
-  expect(scriptSource).toContain('20260519-water-particles-refraction');
+  expect(scriptSource).toContain('20260520-visible-bubble-rings');
+});
+
+test('debug water bubble probe spawns visible-frame bubbles', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Desktop capture is enough for the water probe.');
+  const logs = [];
+  page.on('console', message => logs.push(message.text()));
+
+  await page.goto('/?ballDebug=1&ballStartLevel=3&ballDebugWaterBubbles=1');
+  await waitForDebugEvent(page, logs, 'main menu layout', 10000);
+  await startGame(page, testInfo.project.name);
+  await waitForDebugEvent(page, logs, 'water bubble probe count=14', 10000);
+  let screenshot;
+  await expect.poll(async () => {
+    screenshot = await page.screenshot();
+    return visibleBubbleRingStats(screenshot).ringPixels;
+  }, {
+    timeout: 5000,
+    message: 'Expected visible water bubble ring pixels in the water band.'
+  }).toBeGreaterThanOrEqual(36);
+
+  await testInfo.attach('water-bubble-probe.png', {
+    body: screenshot,
+    contentType: 'image/png'
+  });
 });
 
 test('auto-advances through every level without a black screen', async ({ page }, testInfo) => {
@@ -592,6 +616,33 @@ async function screenshotHasNonBlackPixels(page) {
   }
 
   return visiblePixels > Math.max(50, samples * 0.02);
+}
+
+function visibleBubbleRingStats(screenshot) {
+  const png = PNG.sync.read(screenshot);
+  const minX = Math.floor(png.width * 0.14);
+  const maxX = Math.floor(png.width * 0.92);
+  const minY = Math.floor(png.height * 0.76);
+  const maxY = Math.floor(png.height * 0.94);
+  let ringPixels = 0;
+
+  for(let y = minY; y < maxY; y++){
+    for(let x = minX; x < maxX; x++){
+      const index = (png.width * y + x) << 2;
+      if(png.data[index + 3] === 0)
+        continue;
+      const red = png.data[index];
+      const green = png.data[index + 1];
+      const blue = png.data[index + 2];
+      if(red > 180 && green > 190 && blue > 175)
+        ringPixels++;
+    }
+  }
+
+  return {
+    ringPixels,
+    minimum: Math.max(36, Math.floor((maxX - minX) / 22))
+  };
 }
 
 async function screenshotHasBlackCompletionScreen(page) {
