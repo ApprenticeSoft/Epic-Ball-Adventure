@@ -9,9 +9,12 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.Body;
+import com.badlogic.gdx.physics.box2d.CircleShape;
 import com.badlogic.gdx.physics.box2d.Contact;
 import com.badlogic.gdx.physics.box2d.Fixture;
+import com.badlogic.gdx.physics.box2d.PolygonShape;
 import com.badlogic.gdx.physics.box2d.RayCastCallback;
+import com.badlogic.gdx.physics.box2d.Shape;
 import com.badlogic.gdx.physics.box2d.World;
 import com.badlogic.gdx.utils.Array;
 
@@ -63,18 +66,17 @@ public class WaterSplashSystem {
 	private static final int MIN_DROPLETS_PER_IMPACT = 8;
 	private static final int MAX_DROPLETS_PER_IMPACT = 96;
 	private static final float MAX_DROPLET_SPREAD = 28f;
-	private static final int MIN_BUBBLES_PER_IMPACT = 3;
-	private static final int MAX_BUBBLES_PER_IMPACT = 46;
 	private static final int MAX_BUBBLES = 280;
-	private static final float MAX_BUBBLE_SPREAD = 18f;
 	private static final float BUBBLE_SURFACE_MARGIN = 0.04f;
 	private static final float MIN_BUBBLE_TRAIL_DESCENT_SPEED = 0.35f;
+	private static final float BUBBLE_TRAIL_REFERENCE_SPEED = 8f;
 	private static final float MAX_BUBBLE_TRAIL_WINDOW = 1.65f;
 	private static final float BUBBLE_MIN_RISE_ACCEL = 0.65f;
 	private static final float BUBBLE_MAX_RISE_ACCEL = 2.7f;
 	private static final float BUBBLE_MIN_RISE_SPEED = 0.9f;
 	private static final float BUBBLE_MAX_RISE_SPEED = 3.4f;
 	private static final int MAX_TRAIL_BUBBLES_PER_STEP = 10;
+	private static final int MAX_BUBBLE_SPAWN_SAMPLE_ATTEMPTS = 24;
 	private static final int MAX_SURFACE_SAMPLES = 192;
 
 	private final World world;
@@ -94,6 +96,10 @@ public class WaterSplashSystem {
 	private final Vector2 surfaceAngleEndPoint = new Vector2();
 	private final Vector2 bubbleLocalPoint = new Vector2();
 	private final Vector2 bubbleWorldPoint = new Vector2();
+	private final Vector2 bubbleFixtureLocalPoint = new Vector2();
+	private final Vector2 bubbleCandidateWorldPoint = new Vector2();
+	private final Vector2 bubbleCandidateWaterPoint = new Vector2();
+	private final Vector2 bubblePolygonVertex = new Vector2();
 	private final Color waveColor = new Color();
 	private final Color bubbleColor = new Color();
 	private final Color bubbleHighlightColor = new Color();
@@ -317,7 +323,7 @@ public class WaterSplashSystem {
 					water.getSurfaceHalfWidth() * 0.38f, ratio);
 			float surfaceY = surfaceLocalY(water, localX);
 			float radius = 0.42f + (i % 4) * 0.075f;
-			float depth = minimumBubblePlumeDepth(radius) + 0.16f + (i % 3) * 0.16f;
+			float depth = minimumBubbleSpawnDepth(radius) + 0.16f + (i % 3) * 0.16f;
 			float localY = MathUtils.clamp(surfaceY - depth, -water.height + BUBBLE_SURFACE_MARGIN,
 					surfaceY - BUBBLE_SURFACE_MARGIN);
 			bubbleWorldPoint.set(water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY)));
@@ -357,7 +363,6 @@ public class WaterSplashSystem {
 			float alpha = randomDropAlpha(waterAlpha, MathUtils.random(0.5f, 1f));
 			particles.add(SplashParticle.droplet(position, velocity, radius, MAX_AIRBORNE_AGE, alpha));
 		}
-		spawnBubblePlume(impact, water, waterAlpha);
 		trimParticles();
 	}
 
@@ -401,17 +406,19 @@ public class WaterSplashSystem {
 			}
 			Fixture fixture = submerged.fixture;
 			Body body = fixture.getBody();
+			if(!submerged.isBubbleTrailActive())
+				continue;
 			submerged.trailWindow = Math.max(0f, submerged.trailWindow - delta);
 			float descentSpeed = Math.max(0f, -body.getLinearVelocity().dot(submerged.water.getSurfaceNormal()));
 			if(submerged.trailWindow <= 0f || descentSpeed < MIN_BUBBLE_TRAIL_DESCENT_SPEED){
-				submerged.bubbleDebt = Math.min(submerged.bubbleDebt, 0.85f);
+				submerged.finishBubbleTrail();
 				continue;
 			}
 			float size = WaterImpact.approximateFixtureSize(fixture);
 			float mass = fixtureMass(fixture, size);
 			float rate = calculateBubbleTrailRate(descentSpeed, mass, size);
 			if(rate <= 0f){
-				submerged.bubbleDebt = Math.min(submerged.bubbleDebt, 0.95f);
+				submerged.finishBubbleTrail();
 				continue;
 			}
 			submerged.bubbleDebt += rate * delta;
@@ -451,75 +458,13 @@ public class WaterSplashSystem {
 				|| bubbleLocalPoint.y < -bubble.water.height - bubble.radius * 2f;
 	}
 
-	private void spawnBubblePlume(WaterImpact impact, Eau water, float waterAlpha){
-		int bubbleCount = calculateBubblePlumeCount(impact.downwardSpeed, impact.totalSpeed, impact.mass, impact.size,
-				impact.intensity);
-		float radiusBase = calculateBubbleRadiusBase(impact.mass, impact.size, impact.intensity);
-		float spread = calculateBubblePlumeSpread(impact.downwardSpeed, impact.totalSpeed, impact.mass, impact.size,
-				impact.intensity);
-		float centerLocalX = water.getSurfaceLocalX(impact.point);
-		float velocitySide = impact.velocity.dot(new Vector2(impact.surfaceNormal.y, -impact.surfaceNormal.x));
-		float firstLocalX = 0f;
-		float firstLocalY = 0f;
-		float firstSurfaceY = 0f;
-		float firstRadius = 0f;
-		float firstAlpha = 0f;
-		int startBubbleCount = bubbles.size;
-		for(int i = 0; i < bubbleCount; i++){
-			float radius = radiusBase * MathUtils.random(0.45f, 1.18f);
-			float localX = MathUtils.clamp(centerLocalX + MathUtils.random(-spread, spread) * 0.45f,
-					-water.getSurfaceHalfWidth() + BUBBLE_SURFACE_MARGIN,
-					water.getSurfaceHalfWidth() - BUBBLE_SURFACE_MARGIN);
-			float surfaceY = surfaceLocalY(water, localX);
-			float minimumDepth = minimumBubblePlumeDepth(radius);
-			float maximumDepth = Math.max(minimumDepth + 0.12f, impact.size * 0.72f + impact.intensity * 0.08f);
-			float depth = MathUtils.random(minimumDepth, maximumDepth);
-			float localY = MathUtils.clamp(surfaceY - depth, -water.height + BUBBLE_SURFACE_MARGIN,
-					surfaceY - BUBBLE_SURFACE_MARGIN);
-			bubbleWorldPoint.set(water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY)));
-			float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.35f, 0.75f), waterAlpha);
-			Vector2 velocity = new Vector2(impact.surfaceNormal).scl(MathUtils.random(0.16f, 0.62f)
-					+ calculateBubbleMaxRiseSpeed(radius) * MathUtils.random(0.05f, 0.15f)
-					+ impact.downwardSpeed * 0.012f)
-					.mulAdd(new Vector2(impact.surfaceNormal.y, -impact.surfaceNormal.x),
-							MathUtils.random(-0.72f, 0.72f) + velocitySide * 0.018f);
-			bubbles.add(AirBubble.create(water, bubbleWorldPoint, velocity, radius, alpha,
-					MathUtils.random(3.2f, 6.8f)));
-			if(i == 0){
-				firstLocalX = localX;
-				firstLocalY = localY;
-				firstSurfaceY = surfaceY;
-				firstRadius = radius;
-				firstAlpha = alpha;
-			}
-		}
-		trimBubbles();
-		if(DebugConfig.isEnabled() && bubbles.size > startBubbleCount){
-			DebugConfig.log("water bubble plume count=" + (bubbles.size - startBubbleCount)
-					+ " total=" + bubbles.size
-					+ " local=(" + number(firstLocalX) + "," + number(firstLocalY) + ")"
-					+ " surfaceY=" + number(firstSurfaceY)
-					+ " radius=" + number(firstRadius)
-					+ " alpha=" + number(firstAlpha));
-		}
-	}
-
 	private void spawnTrailBubble(Eau water, Fixture fixture, float speed, float mass, float size){
 		if(water == null || fixture == null)
 			return;
-		Body body = fixture.getBody();
-		bubbleLocalPoint.set(water.body.getLocalPoint(body.getWorldCenter()));
-		float localX = MathUtils.clamp(bubbleLocalPoint.x + MathUtils.random(-size * 0.22f, size * 0.22f),
-				-water.getSurfaceHalfWidth() + BUBBLE_SURFACE_MARGIN,
-				water.getSurfaceHalfWidth() - BUBBLE_SURFACE_MARGIN);
-		float surfaceY = surfaceLocalY(water, localX);
-		float radius = calculateBubbleRadiusBase(mass, size, speed * 0.3f) * MathUtils.random(0.35f, 1.4f);
-		float maxY = surfaceY - Math.max(Math.max(0.14f, size * 0.07f), bubbleRemovalClearance(radius) + 0.08f);
-		if(maxY <= -water.height + BUBBLE_SURFACE_MARGIN)
+		float radius = MathUtils.random(calculateBubbleTrailRadiusMin(speed, mass, size),
+				calculateBubbleTrailRadiusMax(speed, mass, size));
+		if(!sampleSubmergedBubblePoint(water, fixture, radius, bubbleWorldPoint))
 			return;
-		float localY = MathUtils.clamp(bubbleLocalPoint.y + MathUtils.random(-size * 0.16f, size * 0.16f),
-				-water.height + BUBBLE_SURFACE_MARGIN, maxY);
-		bubbleWorldPoint.set(water.body.getWorldPoint(bubbleWorldPoint.set(localX, localY)));
 		float waterAlpha = waterAlpha(water);
 		float alpha = capToWaterAlpha(waterAlpha * MathUtils.random(0.2f, 0.6f), waterAlpha);
 		Vector2 normal = water.getSurfaceNormal();
@@ -532,6 +477,68 @@ public class WaterSplashSystem {
 				.mulAdd(tangent.nor(), MathUtils.random(-0.34f, 0.34f));
 		bubbles.add(AirBubble.create(water, bubbleWorldPoint, velocity, radius, alpha,
 				MathUtils.random(3.5f, 7.5f)));
+	}
+
+	private boolean sampleSubmergedBubblePoint(Eau water, Fixture fixture, float radius, Vector2 out){
+		if(water == null || fixture == null || fixture.getBody() == null || out == null)
+			return false;
+		Shape shape = fixture.getShape();
+		if(shape == null)
+			return false;
+		for(int attempt = 0; attempt < MAX_BUBBLE_SPAWN_SAMPLE_ATTEMPTS; attempt++){
+			if(!sampleFixtureLocalPoint(shape, bubbleFixtureLocalPoint))
+				return false;
+			bubbleCandidateWorldPoint.set(fixture.getBody().getWorldPoint(bubbleFixtureLocalPoint));
+			if(!fixture.testPoint(bubbleCandidateWorldPoint))
+				continue;
+			if(!isBubbleSpawnWorldPointSubmerged(water, bubbleCandidateWorldPoint, radius))
+				continue;
+			out.set(bubbleCandidateWorldPoint);
+			return true;
+		}
+		return false;
+	}
+
+	private boolean sampleFixtureLocalPoint(Shape shape, Vector2 out){
+		if(shape.getType() == Shape.Type.Circle)
+			return sampleCircleLocalPoint((CircleShape)shape, out);
+		if(shape.getType() == Shape.Type.Polygon)
+			return samplePolygonLocalPoint((PolygonShape)shape, out);
+		return false;
+	}
+
+	private boolean sampleCircleLocalPoint(CircleShape circle, Vector2 out){
+		float angle = MathUtils.random(0f, MathUtils.PI2);
+		float distance = circle.getRadius() * (float)Math.sqrt(MathUtils.random());
+		Vector2 center = circle.getPosition();
+		out.set(center.x + MathUtils.cos(angle) * distance, center.y + MathUtils.sin(angle) * distance);
+		return true;
+	}
+
+	private boolean samplePolygonLocalPoint(PolygonShape polygon, Vector2 out){
+		int vertexCount = polygon.getVertexCount();
+		if(vertexCount <= 0)
+			return false;
+		polygon.getVertex(0, bubblePolygonVertex);
+		float minX = bubblePolygonVertex.x;
+		float maxX = bubblePolygonVertex.x;
+		float minY = bubblePolygonVertex.y;
+		float maxY = bubblePolygonVertex.y;
+		for(int i = 1; i < vertexCount; i++){
+			polygon.getVertex(i, bubblePolygonVertex);
+			minX = Math.min(minX, bubblePolygonVertex.x);
+			maxX = Math.max(maxX, bubblePolygonVertex.x);
+			minY = Math.min(minY, bubblePolygonVertex.y);
+			maxY = Math.max(maxY, bubblePolygonVertex.y);
+		}
+		out.set(MathUtils.random(minX, maxX), MathUtils.random(minY, maxY));
+		return true;
+	}
+
+	private boolean isBubbleSpawnWorldPointSubmerged(Eau water, Vector2 worldPoint, float radius){
+		bubbleCandidateWaterPoint.set(water.body.getLocalPoint(worldPoint));
+		return isBubbleSpawnLocalPointSubmerged(bubbleCandidateWaterPoint.x, bubbleCandidateWaterPoint.y,
+				surfaceLocalY(water, bubbleCandidateWaterPoint.x), water.getSurfaceHalfWidth(), water.height, radius);
 	}
 
 	private void updateDroplet(SplashParticle particle, float delta){
@@ -931,38 +938,38 @@ public class WaterSplashSystem {
 				+ (float)Math.sqrt(safeMass) * 0.006f, 0.04f, 0.36f);
 	}
 
-	static int calculateBubblePlumeCount(float downwardSpeed, float totalSpeed, float mass, float size,
-			float intensity){
-		float speed = Math.max(0f, downwardSpeed);
-		float travelSpeed = Math.max(speed, Math.max(0f, totalSpeed));
+	static float calculateBubbleTrailRadiusBase(float descentSpeed, float mass, float size){
 		float safeMass = Math.max(0.02f, mass);
 		float safeSize = Math.max(0.1f, size);
-		float safeIntensity = Math.max(0f, intensity);
-		return MathUtils.clamp(MathUtils.round(2.5f + safeIntensity * 1.15f + speed * 0.18f
-				+ travelSpeed * 0.08f + (float)Math.sqrt(safeMass) * 1.4f + safeSize * 0.75f),
-				MIN_BUBBLES_PER_IMPACT, MAX_BUBBLES_PER_IMPACT);
+		float speedScale = calculateBubbleTrailSpeedScale(descentSpeed);
+		return MathUtils.clamp(0.035f + safeSize * 0.018f + (float)Math.sqrt(safeMass) * 0.004f
+				+ speedScale * 0.09f, 0.035f, 0.28f);
 	}
 
-	static float calculateBubblePlumeSpread(float downwardSpeed, float totalSpeed, float mass, float size,
-			float intensity){
-		float travelSpeed = Math.max(Math.max(0f, downwardSpeed), Math.max(0f, totalSpeed));
-		float safeMass = Math.max(0.02f, mass);
-		float safeSize = Math.max(0.1f, size);
-		float safeIntensity = Math.max(0f, intensity);
-		return MathUtils.clamp(0.35f + safeSize * 0.7f + safeIntensity * 0.08f + travelSpeed * 0.08f
-				+ (float)Math.sqrt(safeMass) * 0.2f, 0.15f, MAX_BUBBLE_SPREAD);
+	static float calculateBubbleTrailRadiusMin(float descentSpeed, float mass, float size){
+		float speedScale = calculateBubbleTrailSpeedScale(descentSpeed);
+		return calculateBubbleTrailRadiusBase(descentSpeed, mass, size) * MathUtils.lerp(0.48f, 0.62f, speedScale);
 	}
 
-	static float calculateBubbleRadiusBase(float mass, float size, float intensity){
-		float safeMass = Math.max(0.02f, mass);
-		float safeSize = Math.max(0.1f, size);
-		float safeIntensity = Math.max(0f, intensity);
-		return MathUtils.clamp(0.075f + safeSize * 0.032f + safeIntensity * 0.01f
-				+ (float)Math.sqrt(safeMass) * 0.008f, 0.075f, 0.42f);
+	static float calculateBubbleTrailRadiusMax(float descentSpeed, float mass, float size){
+		float speedScale = calculateBubbleTrailSpeedScale(descentSpeed);
+		return calculateBubbleTrailRadiusBase(descentSpeed, mass, size) * MathUtils.lerp(0.72f, 1.55f, speedScale);
 	}
 
-	static float minimumBubblePlumeDepth(float radiusBase){
+	static float minimumBubbleSpawnDepth(float radiusBase){
 		return Math.max(0.62f, Math.max(0f, radiusBase) * 1.6f + BUBBLE_SURFACE_MARGIN);
+	}
+
+	static float bubbleSpawnSurfaceClearance(float radius){
+		return BUBBLE_SURFACE_MARGIN + bubbleRemovalClearance(radius) + 0.01f;
+	}
+
+	static boolean isBubbleSpawnLocalPointSubmerged(float localX, float localY, float surfaceY, float halfWidth,
+			float height, float radius){
+		return localX >= -Math.max(0f, halfWidth)
+				&& localX <= Math.max(0f, halfWidth)
+				&& localY <= surfaceY - bubbleSpawnSurfaceClearance(radius)
+				&& localY >= -Math.max(0f, height) + BUBBLE_SURFACE_MARGIN;
 	}
 
 	static float calculateBubbleTrailRate(float totalSpeed, float mass, float size){
@@ -971,8 +978,14 @@ public class WaterSplashSystem {
 			return 0f;
 		float safeMass = Math.max(0.02f, mass);
 		float safeSize = Math.max(0.1f, size);
-		return MathUtils.clamp((speed - MIN_BUBBLE_TRAIL_DESCENT_SPEED) * 2.55f
-				+ (float)Math.sqrt(safeMass) * 1.25f + safeSize * 1.05f, 0f, 48f);
+		float speedScale = calculateBubbleTrailSpeedScale(speed);
+		return MathUtils.clamp((speed - MIN_BUBBLE_TRAIL_DESCENT_SPEED) * 4.5f
+				+ speedScale * ((float)Math.sqrt(safeMass) * 0.7f + safeSize * 0.55f), 0f, 48f);
+	}
+
+	static float calculateBubbleTrailSpeedScale(float descentSpeed){
+		float speedRange = BUBBLE_TRAIL_REFERENCE_SPEED - MIN_BUBBLE_TRAIL_DESCENT_SPEED;
+		return MathUtils.clamp((Math.max(0f, descentSpeed) - MIN_BUBBLE_TRAIL_DESCENT_SPEED) / speedRange, 0f, 1f);
 	}
 
 	static float calculateBubbleTrailWindow(float downwardSpeed, float size){
@@ -1175,6 +1188,8 @@ public class WaterSplashSystem {
 		final Fixture fixture;
 		float bubbleDebt;
 		float trailWindow;
+		private boolean bubbleTrailActive;
+		private boolean bubbleTrailConsumed;
 
 		SubmergedFixture(Eau water, Fixture fixture){
 			this.water = water;
@@ -1182,10 +1197,24 @@ public class WaterSplashSystem {
 		}
 
 		void startBubbleTrail(float downwardSpeed, float size){
+			if(bubbleTrailConsumed)
+				return;
+			bubbleTrailConsumed = true;
 			if(downwardSpeed < MIN_BUBBLE_TRAIL_DESCENT_SPEED)
 				return;
-			trailWindow = Math.max(trailWindow, calculateBubbleTrailWindow(downwardSpeed, size));
-			bubbleDebt = Math.min(bubbleDebt, 0.45f);
+			bubbleTrailActive = true;
+			trailWindow = calculateBubbleTrailWindow(downwardSpeed, size);
+			bubbleDebt = 0f;
+		}
+
+		void finishBubbleTrail(){
+			bubbleTrailActive = false;
+			trailWindow = 0f;
+			bubbleDebt = 0f;
+		}
+
+		boolean isBubbleTrailActive(){
+			return bubbleTrailActive;
 		}
 	}
 

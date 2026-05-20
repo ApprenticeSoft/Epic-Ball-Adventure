@@ -161,43 +161,45 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
-	public void bubblePlumeScalesWithImpactEnergy(){
-		int lightCount = WaterSplashSystem.calculateBubblePlumeCount(2f, 2f, 0.05f, 0.6f, 1f);
-		int heavyCount = WaterSplashSystem.calculateBubblePlumeCount(24f, 28f, 18f, 4f, 18f);
-
-		assertTrue(heavyCount > lightCount * 4);
-		assertTrue(heavyCount >= 35);
-		assertTrue(heavyCount <= 46);
-		assertTrue(WaterSplashSystem.calculateBubblePlumeSpread(24f, 28f, 18f, 4f, 18f)
-				> WaterSplashSystem.calculateBubblePlumeSpread(2f, 2f, 0.05f, 0.6f, 1f) * 2f);
-		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(18f, 4f, 18f)
-				> WaterSplashSystem.calculateBubbleRadiusBase(0.05f, 0.6f, 1f));
-	}
-
-	@Test
-	public void bubblePlumeCountIsClamped(){
-		assertEquals(3, WaterSplashSystem.calculateBubblePlumeCount(0f, 0f, 0f, 0f, 0f));
-		assertEquals(46, WaterSplashSystem.calculateBubblePlumeCount(100f, 100f, 100f, 100f, 100f));
-	}
-
-	@Test
-	public void bubbleRadiusHasReadableMinimum(){
-		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(0.02f, 0.1f, 0f) >= 0.075f);
-	}
-
-	@Test
 	public void waterParticlesUsePlainCircleRegion(){
 		assertEquals("PlainCircle", WaterSplashSystem.particleCircleRegionName());
 		assertEquals("BubbleRing", WaterSplashSystem.bubbleRingRegionName());
 	}
 
 	@Test
-	public void bubblePlumeDepthAvoidsImmediateSurfaceRemoval(){
+	public void bubbleSpawnDepthAvoidsImmediateSurfaceRemoval(){
 		float radius = 0.42f;
 		float surfaceY = 1f;
-		float localY = surfaceY - WaterSplashSystem.minimumBubblePlumeDepth(radius);
+		float localY = surfaceY - WaterSplashSystem.minimumBubbleSpawnDepth(radius);
 
 		assertFalse(WaterSplashSystem.bubbleReachedSurface(localY, surfaceY, radius));
+	}
+
+	@Test
+	public void bubbleTrailRatePrimarilyFollowsDescentSpeed(){
+		float slowHugeRate = WaterSplashSystem.calculateBubbleTrailRate(0.6f, 100f, 20f);
+		float fastSmallRate = WaterSplashSystem.calculateBubbleTrailRate(8f, 0.02f, 0.1f);
+
+		assertTrue(fastSmallRate > slowHugeRate * 10f);
+	}
+
+	@Test
+	public void bubbleTrailRadiusRangeWidensWithDescentSpeed(){
+		float slowMin = WaterSplashSystem.calculateBubbleTrailRadiusMin(0.6f, 0.05f, 0.6f);
+		float slowMax = WaterSplashSystem.calculateBubbleTrailRadiusMax(0.6f, 0.05f, 0.6f);
+		float fastMin = WaterSplashSystem.calculateBubbleTrailRadiusMin(8f, 0.05f, 0.6f);
+		float fastMax = WaterSplashSystem.calculateBubbleTrailRadiusMax(8f, 0.05f, 0.6f);
+
+		assertTrue(fastMax > slowMax * 4f);
+		assertTrue(fastMax - fastMin > (slowMax - slowMin) * 5f);
+	}
+
+	@Test
+	public void bubbleSpawnLocalPointMustBeSubmergedInsideWater(){
+		assertTrue(WaterSplashSystem.isBubbleSpawnLocalPointSubmerged(0f, 0.4f, 1f, 2f, 3f, 0.12f));
+		assertFalse(WaterSplashSystem.isBubbleSpawnLocalPointSubmerged(0f, 0.98f, 1f, 2f, 3f, 0.12f));
+		assertFalse(WaterSplashSystem.isBubbleSpawnLocalPointSubmerged(2.1f, 0.4f, 1f, 2f, 3f, 0.12f));
+		assertFalse(WaterSplashSystem.isBubbleSpawnLocalPointSubmerged(0f, -3.1f, 1f, 2f, 3f, 0.12f));
 	}
 
 	@Test
@@ -216,6 +218,29 @@ public class WaterSplashSystemTest {
 				> WaterSplashSystem.calculateBubbleTrailWindow(1f, 0.4f));
 		assertEquals(WaterSplashSystem.calculateBubbleTrailWindow(100f, 100f),
 				WaterSplashSystem.calculateBubbleTrailWindow(200f, 200f), 0.0001f);
+	}
+
+	@Test
+	public void bubbleTrailIsConsumedByFirstWaterEntryDescent(){
+		WaterSplashSystem.SubmergedFixture submerged = new WaterSplashSystem.SubmergedFixture(null, null);
+
+		submerged.startBubbleTrail(5f, 1f);
+		assertTrue(submerged.isBubbleTrailActive());
+		submerged.finishBubbleTrail();
+		submerged.startBubbleTrail(8f, 1f);
+
+		assertFalse(submerged.isBubbleTrailActive());
+		assertEquals(0f, submerged.trailWindow, 0.0001f);
+	}
+
+	@Test
+	public void slowWaterEntryDoesNotStartLaterDragBubbles(){
+		WaterSplashSystem.SubmergedFixture submerged = new WaterSplashSystem.SubmergedFixture(null, null);
+
+		submerged.startBubbleTrail(0.1f, 1f);
+		submerged.startBubbleTrail(8f, 1f);
+
+		assertFalse(submerged.isBubbleTrailActive());
 	}
 
 	@Test
