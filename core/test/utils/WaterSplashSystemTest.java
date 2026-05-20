@@ -166,7 +166,8 @@ public class WaterSplashSystemTest {
 		int heavyCount = WaterSplashSystem.calculateBubblePlumeCount(24f, 28f, 18f, 4f, 18f);
 
 		assertTrue(heavyCount > lightCount * 4);
-		assertEquals(79, heavyCount);
+		assertTrue(heavyCount >= 35);
+		assertTrue(heavyCount <= 46);
 		assertTrue(WaterSplashSystem.calculateBubblePlumeSpread(24f, 28f, 18f, 4f, 18f)
 				> WaterSplashSystem.calculateBubblePlumeSpread(2f, 2f, 0.05f, 0.6f, 1f) * 2f);
 		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(18f, 4f, 18f)
@@ -175,13 +176,13 @@ public class WaterSplashSystemTest {
 
 	@Test
 	public void bubblePlumeCountIsClamped(){
-		assertEquals(6, WaterSplashSystem.calculateBubblePlumeCount(0f, 0f, 0f, 0f, 0f));
-		assertEquals(80, WaterSplashSystem.calculateBubblePlumeCount(100f, 100f, 100f, 100f, 100f));
+		assertEquals(3, WaterSplashSystem.calculateBubblePlumeCount(0f, 0f, 0f, 0f, 0f));
+		assertEquals(46, WaterSplashSystem.calculateBubblePlumeCount(100f, 100f, 100f, 100f, 100f));
 	}
 
 	@Test
 	public void bubbleRadiusHasReadableMinimum(){
-		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(0.02f, 0.1f, 0f) >= 0.18f);
+		assertTrue(WaterSplashSystem.calculateBubbleRadiusBase(0.02f, 0.1f, 0f) >= 0.075f);
 	}
 
 	@Test
@@ -192,12 +193,11 @@ public class WaterSplashSystemTest {
 
 	@Test
 	public void bubblePlumeDepthAvoidsImmediateSurfaceRemoval(){
-		float radiusBase = 0.48f;
-		float largestSpawnedRadius = radiusBase * 1.35f;
+		float radius = 0.42f;
 		float surfaceY = 1f;
-		float localY = surfaceY - WaterSplashSystem.minimumBubblePlumeDepth(radiusBase);
+		float localY = surfaceY - WaterSplashSystem.minimumBubblePlumeDepth(radius);
 
-		assertFalse(WaterSplashSystem.bubbleReachedSurface(localY, surfaceY, largestSpawnedRadius));
+		assertFalse(WaterSplashSystem.bubbleReachedSurface(localY, surfaceY, radius));
 	}
 
 	@Test
@@ -208,6 +208,14 @@ public class WaterSplashSystemTest {
 
 		assertTrue(lightRate > 0f);
 		assertTrue(heavyRate > lightRate * 3f);
+	}
+
+	@Test
+	public void bubbleTrailWindowScalesWithImpactDescent(){
+		assertTrue(WaterSplashSystem.calculateBubbleTrailWindow(8f, 1.2f)
+				> WaterSplashSystem.calculateBubbleTrailWindow(1f, 0.4f));
+		assertEquals(WaterSplashSystem.calculateBubbleTrailWindow(100f, 100f),
+				WaterSplashSystem.calculateBubbleTrailWindow(200f, 200f), 0.0001f);
 	}
 
 	@Test
@@ -247,6 +255,21 @@ public class WaterSplashSystemTest {
 		assertTrue(bubble.position.y > 0.2f);
 		assertTrue(bubble.renderRadius() > initialRadius);
 		assertTrue(bubble.renderAlpha(1f) > 0f);
+	}
+
+	@Test
+	public void largerAirBubblesRiseFaster(){
+		WaterSplashSystem.AirBubble small = WaterSplashSystem.AirBubble.create(null,
+				new Vector2(0f, 0f), new Vector2(0f, 0f), 0.06f, 0.5f, 4f);
+		WaterSplashSystem.AirBubble large = WaterSplashSystem.AirBubble.create(null,
+				new Vector2(0f, 0f), new Vector2(0f, 0f), 0.34f, 0.5f, 4f);
+
+		small.update(0.8f);
+		large.update(0.8f);
+
+		assertTrue(large.position.y > small.position.y);
+		assertTrue(WaterSplashSystem.calculateBubbleMaxRiseSpeed(0.34f)
+				> WaterSplashSystem.calculateBubbleMaxRiseSpeed(0.06f));
 	}
 
 	@Test
@@ -542,6 +565,33 @@ public class WaterSplashSystemTest {
 	}
 
 	@Test
+	public void surfaceSimulationThrottlesWeakImpactsWhenAlreadyBusy(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+
+		simulation.applyImpact(0f, 0.8f, 1.2f, 0.5f, 10);
+		for(int i = 0; i < 24; i++)
+			simulation.applyImpact(-1.6f + i * 0.14f, 0.18f, 0.2f, 0.3f, 8);
+
+		assertTrue(simulation.travelingWaveCount() <= 34);
+	}
+
+	@Test
+	public void surfaceSimulationSmoothsNeedlePeaks(){
+		WaterSplashSystem.WaterSurfaceSimulation simulation =
+				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
+		int center = simulation.nearestSample(0f);
+		simulation.displacements[center - 1] = -1f;
+		simulation.displacements[center] = 1f;
+		simulation.displacements[center + 1] = -1f;
+		simulation.energy = 1f;
+
+		simulation.update(1f / 60f);
+
+		assertTrue(maxAdjacentSpringDelta(simulation) <= 0.35f);
+	}
+
+	@Test
 	public void surfaceSimulationPropagatesToNeighboringSamples(){
 		WaterSplashSystem.WaterSurfaceSimulation simulation =
 				new WaterSplashSystem.WaterSurfaceSimulation(null, 2f);
@@ -730,5 +780,12 @@ public class WaterSplashSystemTest {
 			previousSign = sign;
 		}
 		return signChanges;
+	}
+
+	private float maxAdjacentSpringDelta(WaterSplashSystem.WaterSurfaceSimulation simulation){
+		float maxDelta = 0f;
+		for(int i = 1; i < simulation.sampleCount; i++)
+			maxDelta = Math.max(maxDelta, Math.abs(simulation.displacements[i] - simulation.displacements[i - 1]));
+		return maxDelta;
 	}
 }
