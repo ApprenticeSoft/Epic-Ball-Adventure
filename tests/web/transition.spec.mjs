@@ -6,7 +6,7 @@ test('web entrypoint uses the current bundle cache token', async ({ page }) => {
 
   const scriptSource = await page.locator('script[src*="html.nocache.js"]').getAttribute('src');
 
-  expect(scriptSource).toContain('20260520-realistic-bubble-trails');
+  expect(scriptSource).toContain('20260520-forced-atlas-refresh');
 });
 
 test('debug water bubble probe spawns visible-frame bubbles', async ({ page }, testInfo) => {
