@@ -37,7 +37,19 @@ npm run export:play-store-metadata
 npm run verify:play-store-ready
 ```
 
-Run the stricter Play Store gate only when upload signing credentials are available:
+For first-time Play upload signing setup, create an ignored local keystore config and back up the generated keystore and password outside the repository:
+
+```bash
+EPIC_BALL_UPLOAD_STORE_PASSWORD=... npm run create:upload-keystore
+```
+
+Run the stricter Play Store gate only when upload signing credentials are available through `android/signing.properties`:
+
+```bash
+./gradlew :android:verifyPlayStoreRelease
+```
+
+The same gate can also be run with environment variables:
 
 ```bash
 EPIC_BALL_UPLOAD_STORE_FILE=/absolute/path/upload.jks \

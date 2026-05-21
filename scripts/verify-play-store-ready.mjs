@@ -278,12 +278,34 @@ async function checkAndroidConfig(){
 	for(const required of [
 		'versionCode = 1',
 		'versionName = "1.0.0"',
-		'tasks.register("verifyPlayStoreRelease")'
+		'tasks.register("verifyPlayStoreRelease")',
+		'file("signing.properties")'
 	]) {
 		if(!buildGradle.includes(required))
 			fail(`Android build config is missing ${required}`);
 	}
 	passIfNoNewFailures(startFailures, 'Android release build metadata is present');
+
+	startFailures = failureCount();
+	const packageJson = await readJson('package.json');
+	if(packageJson.scripts?.['create:upload-keystore'] !== 'node scripts/create-upload-keystore.mjs')
+		fail('package.json is missing create:upload-keystore script');
+	const gitignore = await readText('.gitignore');
+	for(const required of [
+		'*.jks',
+		'android/keystores/',
+		'android/signing.properties'
+	]) {
+		if(!gitignore.includes(required))
+			fail(`.gitignore is missing ${required}`);
+	}
+	await expectTextIncludes('scripts/create-upload-keystore.mjs', [
+		'keytool',
+		'android/keystores/upload.jks',
+		'android/signing.properties',
+		'EPIC_BALL_UPLOAD_STORE_PASSWORD'
+	]);
+	passIfNoNewFailures(startFailures, 'upload signing helper and ignored local signing config are present');
 }
 
 async function checkAndroidBundleArtifact(){

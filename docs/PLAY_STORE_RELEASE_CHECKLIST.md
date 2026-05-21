@@ -21,7 +21,19 @@ npm run verify:play-store-ready
 android/build/outputs/bundle/release/android-release.aab
 ```
 
-- For a real upload candidate, configure the upload signing key outside the repo and run:
+- For a real upload candidate, configure the upload signing key outside the repo. For first-time local setup, create an ignored upload keystore and `android/signing.properties` file:
+
+```bash
+EPIC_BALL_UPLOAD_STORE_PASSWORD=... npm run create:upload-keystore
+```
+
+Back up the generated keystore and password somewhere durable outside this repository. After signing is configured through `android/signing.properties`, run:
+
+```bash
+./gradlew :android:verifyPlayStoreRelease
+```
+
+The upload key may also be supplied through environment variables with the same names:
 
 ```bash
 EPIC_BALL_UPLOAD_STORE_FILE=/absolute/path/upload.jks \
@@ -31,7 +43,7 @@ EPIC_BALL_UPLOAD_KEY_PASSWORD=... \
 ./gradlew :android:verifyPlayStoreRelease
 ```
 
-The upload key may also be supplied through ignored local Gradle properties with the same names. Do not commit keystores, passwords, or generated bundles.
+Do not commit keystores, passwords, local signing properties, or generated bundles.
 
 ## Play Console Metadata
 

@@ -4,10 +4,19 @@ configurations {
     natives
 }
 
+def localSigningProperties = new Properties()
+def localSigningPropertiesFile = file("signing.properties")
+if (localSigningPropertiesFile.exists()) {
+    localSigningPropertiesFile.withInputStream { localSigningProperties.load(it) }
+}
+
 def releaseSecret = { name ->
     def value = findProperty(name)
     if (value == null || value.toString().trim().isEmpty()) {
         value = System.getenv(name)
+    }
+    if (value == null || value.toString().trim().isEmpty()) {
+        value = localSigningProperties.getProperty(name)
     }
     value == null || value.toString().trim().isEmpty() ? null : value.toString()
 }
@@ -140,7 +149,7 @@ tasks.register("verifyPlayStoreRelease") {
             errors.add("targetSdk must be at least 35 for current Google Play submission policy")
         }
         if (!uploadSigningReady) {
-            errors.add("release upload signing is not configured; set EPIC_BALL_UPLOAD_STORE_FILE, EPIC_BALL_UPLOAD_STORE_PASSWORD, EPIC_BALL_UPLOAD_KEY_ALIAS, and EPIC_BALL_UPLOAD_KEY_PASSWORD")
+            errors.add("release upload signing is not configured; run npm run create:upload-keystore or set EPIC_BALL_UPLOAD_STORE_FILE, EPIC_BALL_UPLOAD_STORE_PASSWORD, EPIC_BALL_UPLOAD_KEY_ALIAS, and EPIC_BALL_UPLOAD_KEY_PASSWORD")
         }
         if (uploadStoreFile != null && !file(uploadStoreFile).exists()) {
             errors.add("upload keystore does not exist: ${uploadStoreFile}")

@@ -49,6 +49,7 @@ local.properties
 *.keystore
 *.p12
 android/keystores/
+android/signing.properties
 .settings/
 .loadpath
 .externalToolBuilders/
