@@ -86,8 +86,32 @@ async function checkStoreAssets(){
 	for(const [density, size] of densities) {
 		const icon = await readPng(`android/res/drawable-${density}/ic_launcher.png`);
 		expectPng(icon, { width: size, height: size, colorType: 6 });
+		const adaptiveIcon = await readPng(`android/res/mipmap-${density}/ic_launcher.png`);
+		expectPng(adaptiveIcon, { width: size, height: size, colorType: 6 });
+		const roundIcon = await readPng(`android/res/mipmap-${density}/ic_launcher_round.png`);
+		expectPng(roundIcon, { width: size, height: size, colorType: 6 });
 	}
-	passIfNoNewFailures(startFailures, 'Android launcher icons are present for mdpi through xxxhdpi');
+	passIfNoNewFailures(startFailures, 'Android launcher fallback icons are present for mdpi through xxxhdpi');
+
+	startFailures = failureCount();
+	const foreground = await readPng('android/res/drawable-nodpi/ic_launcher_foreground.png');
+	expectPng(foreground, { width: 432, height: 432, colorType: 6 });
+	expectTransparentAndOpaque(foreground);
+	await expectTextIncludes('android/res/mipmap-anydpi-v26/ic_launcher.xml', [
+		'<adaptive-icon',
+		'@color/ic_launcher_background',
+		'@drawable/ic_launcher_foreground',
+		'@drawable/ic_launcher_monochrome'
+	]);
+	await expectTextIncludes('android/res/mipmap-anydpi-v26/ic_launcher_round.xml', [
+		'<adaptive-icon',
+		'@color/ic_launcher_background',
+		'@drawable/ic_launcher_foreground',
+		'@drawable/ic_launcher_monochrome'
+	]);
+	await expectTextIncludes('android/res/drawable/ic_launcher_monochrome.xml', ['<vector', 'android:pathData']);
+	await expectTextIncludes('android/res/values/colors.xml', ['ic_launcher_background', '#EF1558']);
+	passIfNoNewFailures(startFailures, 'Android adaptive launcher icon resources are present');
 
 	startFailures = failureCount();
 	const manifest = await readText('docs/play-store-assets/README.md');
@@ -222,7 +246,8 @@ async function checkAndroidConfig(){
 		'android:appCategory="game"',
 		'android:isGame="true"',
 		'android:exported="true"',
-		'android:icon="@drawable/ic_launcher"'
+		'android:icon="@mipmap/ic_launcher"',
+		'android:roundIcon="@mipmap/ic_launcher_round"'
 	]) {
 		if(!manifest.includes(required))
 			fail(`Android manifest is missing ${required}`);
@@ -274,12 +299,17 @@ async function checkAndroidBundleArtifact(){
 		'base/assets/Levels/Level 5.tmx',
 		'base/assets/Images/Images.pack',
 		'base/assets/Images/ImagesWaterBubbles.png',
-		'base/res/drawable-xxxhdpi-v4/ic_launcher.png'
+		'base/res/mipmap-anydpi-v26/ic_launcher.xml',
+		'base/res/mipmap-anydpi-v26/ic_launcher_round.xml',
+		'base/res/mipmap-xxxhdpi-v4/ic_launcher.png',
+		'base/res/mipmap-xxxhdpi-v4/ic_launcher_round.png',
+		'base/res/drawable-nodpi-v4/ic_launcher_foreground.png',
+		'base/res/drawable/ic_launcher_monochrome.xml'
 	]) {
 		if(!entries.includes(required))
 			fail(`release AAB is missing ${required}`);
 	}
-	passIfNoNewFailures(startFailures, 'release AAB contains manifest, code, launcher icon, and gameplay assets');
+	passIfNoNewFailures(startFailures, 'release AAB contains manifest, code, adaptive launcher icon, and gameplay assets');
 
 	startFailures = failureCount();
 	for(const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
@@ -322,6 +352,14 @@ async function expectSameFile(sourceRelativePath, targetRelativePath){
 		fail(`${targetRelativePath} does not match ${sourceRelativePath}`);
 }
 
+async function expectTextIncludes(relativePath, requiredSnippets){
+	const text = await readText(relativePath);
+	for(const snippet of requiredSnippets) {
+		if(!text.includes(snippet))
+			fail(`${relativePath} is missing ${snippet}`);
+	}
+}
+
 function expectPng(png, expected){
 	if(png.width !== expected.width || png.height !== expected.height)
 		fail(`${png.relativePath} expected ${expected.width}x${expected.height}, got ${png.width}x${png.height}`);
@@ -338,6 +376,21 @@ function expectOpaque(png){
 			return;
 		}
 	}
+}
+
+function expectTransparentAndOpaque(png){
+	let transparentPixels = 0;
+	let opaquePixels = 0;
+	for(let index = 3; index < png.data.length; index += 4) {
+		if(png.data[index] === 0)
+			transparentPixels++;
+		if(png.data[index] === 255)
+			opaquePixels++;
+	}
+	if(transparentPixels === 0)
+		fail(`${png.relativePath} must include transparent padding`);
+	if(opaquePixels === 0)
+		fail(`${png.relativePath} must include opaque foreground artwork`);
 }
 
 function section(markdown, heading){

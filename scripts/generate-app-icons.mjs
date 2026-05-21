@@ -4,20 +4,34 @@ import { PNG } from 'pngjs';
 
 const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
 
-const outputs = [
+const opaqueIconOutputs = [
 	{ file: 'docs/play-store-assets/app-icon.png', size: 512, playStore: true },
 	{ file: 'android/ic_launcher-web.png', size: 512 },
 	{ file: 'android/res/drawable-mdpi/ic_launcher.png', size: 48 },
 	{ file: 'android/res/drawable-hdpi/ic_launcher.png', size: 72 },
 	{ file: 'android/res/drawable-xhdpi/ic_launcher.png', size: 96 },
 	{ file: 'android/res/drawable-xxhdpi/ic_launcher.png', size: 144 },
-	{ file: 'android/res/drawable-xxxhdpi/ic_launcher.png', size: 192 }
+	{ file: 'android/res/drawable-xxxhdpi/ic_launcher.png', size: 192 },
+	{ file: 'android/res/mipmap-mdpi/ic_launcher.png', size: 48 },
+	{ file: 'android/res/mipmap-mdpi/ic_launcher_round.png', size: 48 },
+	{ file: 'android/res/mipmap-hdpi/ic_launcher.png', size: 72 },
+	{ file: 'android/res/mipmap-hdpi/ic_launcher_round.png', size: 72 },
+	{ file: 'android/res/mipmap-xhdpi/ic_launcher.png', size: 96 },
+	{ file: 'android/res/mipmap-xhdpi/ic_launcher_round.png', size: 96 },
+	{ file: 'android/res/mipmap-xxhdpi/ic_launcher.png', size: 144 },
+	{ file: 'android/res/mipmap-xxhdpi/ic_launcher_round.png', size: 144 },
+	{ file: 'android/res/mipmap-xxxhdpi/ic_launcher.png', size: 192 },
+	{ file: 'android/res/mipmap-xxxhdpi/ic_launcher_round.png', size: 192 }
 ];
+const adaptiveForegroundOutput = { file: 'android/res/drawable-nodpi/ic_launcher_foreground.png', size: 432 };
 
-for(const output of outputs)
+for(const output of [...opaqueIconOutputs, adaptiveForegroundOutput])
 	await mkdir(path.dirname(path.join(rootDir, output.file)), { recursive: true });
+await mkdir(path.join(rootDir, 'android/res/mipmap-anydpi-v26'), { recursive: true });
+await mkdir(path.join(rootDir, 'android/res/drawable'), { recursive: true });
+await mkdir(path.join(rootDir, 'android/res/values'), { recursive: true });
 
-for(const output of outputs) {
+for(const output of opaqueIconOutputs) {
 	const png = createIcon(output.size);
 	const encoded = PNG.sync.write(png, {
 		colorType: 6,
@@ -29,12 +43,36 @@ for(const output of outputs) {
 	console.log(`Wrote ${output.file} ${output.size}x${output.size}`);
 }
 
+{
+	const png = createAdaptiveForeground(adaptiveForegroundOutput.size);
+	const encoded = PNG.sync.write(png, {
+		colorType: 6,
+		inputColorType: 6,
+		inputHasAlpha: true
+	});
+	const outputPath = path.join(rootDir, adaptiveForegroundOutput.file);
+	await writeFile(outputPath, encoded);
+	console.log(`Wrote ${adaptiveForegroundOutput.file} ${adaptiveForegroundOutput.size}x${adaptiveForegroundOutput.size}`);
+}
+
+await writeAdaptiveIconResources();
 await validateOutputs();
 
 function createIcon(size){
 	const png = new PNG({ width: size, height: size, colorType: 6 });
 	fill(png, rgba(239, 21, 88));
+	drawIconMotif(png);
+	return png;
+}
 
+function createAdaptiveForeground(size){
+	const png = new PNG({ width: size, height: size, colorType: 6 });
+	fill(png, rgba(0, 0, 0, 0));
+	drawIconMotif(png);
+	return png;
+}
+
+function drawIconMotif(png){
 	drawRect(png, 72, 334, 440, 392, rgba(250, 199, 166));
 	drawRect(png, 342, 296, 386, 334, rgba(126, 113, 160));
 	drawRect(png, 72, 392, 440, 406, rgba(217, 185, 154));
@@ -48,8 +86,6 @@ function createIcon(size){
 	drawCircle(png, 312, 150, 33, rgba(255, 214, 61), ballMask);
 	drawCircle(png, 212, 176, 16, rgba(255, 248, 214, 170), ballMask);
 	drawCircle(png, 282, 120, 12, rgba(255, 248, 214, 115), ballMask);
-
-	return png;
 }
 
 function fill(png, color){
@@ -110,11 +146,17 @@ function circleCoverage(x, y, cx, cy, radius){
 function blendPixel(png, x, y, color, coverage){
 	const index = (png.width * y + x) << 2;
 	const sourceAlpha = (color.a / 255) * coverage;
-	const inverse = 1 - sourceAlpha;
-	png.data[index] = Math.round(color.r * sourceAlpha + png.data[index] * inverse);
-	png.data[index + 1] = Math.round(color.g * sourceAlpha + png.data[index + 1] * inverse);
-	png.data[index + 2] = Math.round(color.b * sourceAlpha + png.data[index + 2] * inverse);
-	png.data[index + 3] = 255;
+	const destinationAlpha = png.data[index + 3] / 255;
+	const outputAlpha = sourceAlpha + destinationAlpha * (1 - sourceAlpha);
+	if(outputAlpha <= 0) {
+		setPixel(png, x, y, rgba(0, 0, 0, 0));
+		return;
+	}
+	const destinationWeight = destinationAlpha * (1 - sourceAlpha);
+	png.data[index] = Math.round((color.r * sourceAlpha + png.data[index] * destinationWeight) / outputAlpha);
+	png.data[index + 1] = Math.round((color.g * sourceAlpha + png.data[index + 1] * destinationWeight) / outputAlpha);
+	png.data[index + 2] = Math.round((color.b * sourceAlpha + png.data[index + 2] * destinationWeight) / outputAlpha);
+	png.data[index + 3] = Math.round(outputAlpha * 255);
 }
 
 function setPixel(png, x, y, color){
@@ -130,7 +172,7 @@ function rgba(r, g, b, a = 255){
 }
 
 async function validateOutputs(){
-	for(const output of outputs) {
+	for(const output of opaqueIconOutputs) {
 		const outputPath = path.join(rootDir, output.file);
 		const buffer = await readFile(outputPath);
 		const png = PNG.sync.read(buffer);
@@ -145,4 +187,53 @@ async function validateOutputs(){
 				throw new Error(`${output.file} must use full-square opaque artwork for Google Play icon masking`);
 		}
 	}
+	const foregroundPath = path.join(rootDir, adaptiveForegroundOutput.file);
+	const foregroundBuffer = await readFile(foregroundPath);
+	const foreground = PNG.sync.read(foregroundBuffer);
+	if(foreground.width !== adaptiveForegroundOutput.size || foreground.height !== adaptiveForegroundOutput.size)
+		throw new Error(`${adaptiveForegroundOutput.file} expected ${adaptiveForegroundOutput.size}x${adaptiveForegroundOutput.size}, got ${foreground.width}x${foreground.height}`);
+	if(foreground.colorType !== 6)
+		throw new Error(`${adaptiveForegroundOutput.file} must be a 32-bit RGBA PNG, got colorType ${foreground.colorType}`);
+	let transparentPixels = 0;
+	let opaquePixels = 0;
+	for(let index = 3; index < foreground.data.length; index += 4) {
+		if(foreground.data[index] === 0)
+			transparentPixels++;
+		if(foreground.data[index] === 255)
+			opaquePixels++;
+	}
+	if(transparentPixels === 0 || opaquePixels === 0)
+		throw new Error(`${adaptiveForegroundOutput.file} must contain both transparent padding and opaque foreground artwork`);
+}
+
+async function writeAdaptiveIconResources(){
+	const adaptiveIcon = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>
+`;
+	await writeFile(path.join(rootDir, 'android/res/mipmap-anydpi-v26/ic_launcher.xml'), adaptiveIcon);
+	await writeFile(path.join(rootDir, 'android/res/mipmap-anydpi-v26/ic_launcher_round.xml'), adaptiveIcon);
+
+	await writeFile(path.join(rootDir, 'android/res/drawable/ic_launcher_monochrome.xml'), `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M16,72h76v14h-76z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,22C71.67,22 86,36.33 86,54C86,71.67 71.67,86 54,86C36.33,86 22,71.67 22,54C22,36.33 36.33,22 54,22Z" />
+</vector>
+`);
+	await writeFile(path.join(rootDir, 'android/res/values/colors.xml'), `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#EF1558</color>
+</resources>
+`);
 }
