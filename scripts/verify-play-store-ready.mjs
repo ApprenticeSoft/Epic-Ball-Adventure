@@ -344,6 +344,7 @@ async function checkAndroidConfig(){
 	]);
 	await expectTextIncludes('scripts/run-play-store-preflight.mjs', [
 		'--require-android-device',
+		'EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE',
 		'export:play-store-evidence',
 		'verify:android-device',
 		'verify:play-store-live',
@@ -352,6 +353,10 @@ async function checkAndroidConfig(){
 	]);
 	await expectTextIncludes('scripts/export-play-store-evidence.mjs', [
 		'build/play-store-release-evidence.json',
+		'build/android-device-smoke-evidence.json',
+		'build/android-device-smoke.png',
+		'EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE',
+		'androidDeviceSmoke',
 		'android/build/outputs/bundle/release/android-release.aab',
 		'sha256',
 		'docs/PLAY_CONSOLE_APP_CONTENT.md'

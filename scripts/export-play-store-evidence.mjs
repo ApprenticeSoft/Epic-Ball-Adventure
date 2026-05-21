@@ -6,6 +6,7 @@ import path from 'node:path';
 const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
 const outputPath = path.join(rootDir, 'build/play-store-release-evidence.json');
 const buildGradle = await readText('android/build.gradle');
+const requireAndroidDeviceEvidence = process.env.EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE === '1';
 
 const evidence = {
 	generatedAt: new Date().toISOString(),
@@ -23,6 +24,7 @@ const evidence = {
 		targetSdk: numberAfter(buildGradle, /targetSdk\s*=\s*(\d+)/)
 	},
 	artifacts: {},
+	androidDeviceSmoke: {},
 	playMetadata: {},
 	policy: {},
 	live: {
@@ -45,6 +47,7 @@ for(const required of [
 
 evidence.artifacts.releaseBundle = await fileEvidence('android/build/outputs/bundle/release/android-release.aab');
 evidence.artifacts.debugApk = await fileEvidence('android/build/outputs/apk/debug/android-debug.apk');
+evidence.androidDeviceSmoke = await androidDeviceSmokeEvidence(evidence.artifacts.debugApk, requireAndroidDeviceEvidence);
 
 evidence.playMetadata.fastlane = await groupEvidence('fastlane/metadata/android/en-US', [
 	'title.txt',
@@ -103,6 +106,71 @@ async function groupEvidence(baseRelativePath, fileRelativePaths){
 		basePath: baseRelativePath,
 		files
 	};
+}
+
+async function androidDeviceSmokeEvidence(debugApkEvidence, required){
+	const evidencePath = 'build/android-device-smoke-evidence.json';
+	const screenshotPath = 'build/android-device-smoke.png';
+	const rawEvidence = await readFile(path.join(rootDir, evidencePath), 'utf8').catch(error => {
+		if(error.code === 'ENOENT')
+			return null;
+		throw error;
+	});
+	if(rawEvidence == null) {
+		if(required)
+			throw new Error(`${evidencePath} is missing; run npm run verify:android-device before exporting full release evidence`);
+		return {
+			status: 'not-recorded',
+			evidencePath,
+			screenshotPath
+		};
+	}
+
+	let smoke;
+	try {
+		smoke = JSON.parse(rawEvidence);
+	}
+	catch(error) {
+		if(required)
+			throw new Error(`${evidencePath} is not valid JSON: ${error.message}`);
+		return {
+			status: 'invalid',
+			evidenceFile: await fileEvidence(evidencePath),
+			reasons: [`Invalid JSON: ${error.message}`]
+		};
+	}
+
+	const reasons = [];
+	const smokeFile = await fileEvidence(evidencePath);
+	const screenshotFile = await fileEvidence(screenshotPath).catch(error => {
+		reasons.push(error.message);
+		return null;
+	});
+
+	if(smoke.apk?.sha256 !== debugApkEvidence.sha256)
+		reasons.push('Device smoke APK SHA-256 does not match the current debug APK');
+	if(screenshotFile && smoke.screenshot?.sha256 !== screenshotFile.sha256)
+		reasons.push('Device smoke screenshot SHA-256 does not match the current screenshot file');
+	if(!smoke.device?.serial)
+		reasons.push('Device smoke evidence is missing the Android device serial');
+	if(!smoke.launch?.pid)
+		reasons.push('Device smoke evidence is missing the launched process id');
+
+	const result = {
+		status: reasons.length === 0 ? 'recorded' : 'stale-or-invalid',
+		evidenceFile: smokeFile,
+		screenshot: screenshotFile,
+		generatedAt: smoke.generatedAt || '',
+		packageId: smoke.packageId || '',
+		device: smoke.device || {},
+		installed: smoke.installed || {},
+		launch: smoke.launch || {}
+	};
+	if(reasons.length > 0)
+		result.reasons = reasons;
+	if(required && result.status !== 'recorded')
+		throw new Error(`${evidencePath} is not valid for this release: ${reasons.join('; ')}`);
+	return result;
 }
 
 async function relativeFiles(directoryRelativePath, extension, baseRelativePath){

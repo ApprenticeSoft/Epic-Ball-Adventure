@@ -86,7 +86,8 @@ if(requireAndroidDevice) {
 steps.push({
 	name: 'Export release evidence manifest',
 	command: 'npm',
-	args: ['run', 'export:play-store-evidence']
+	args: ['run', 'export:play-store-evidence'],
+	env: requireAndroidDevice ? { EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE: '1' } : {}
 });
 
 console.log('Google Play preflight');
@@ -111,7 +112,7 @@ for(const [index, step] of steps.entries()) {
 	const result = spawnSync(step.command, step.args, {
 		cwd: rootDir,
 		stdio: 'inherit',
-		env: process.env
+		env: { ...process.env, ...step.env }
 	});
 
 	if(result.error) {

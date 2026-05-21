@@ -29,13 +29,15 @@ npm run test:web-transition
 
 When changing GWT-compatible code, assets, web entrypoints, water rendering, transitions, or editor behavior, run both commands before deployment.
 
-For a Google Play release candidate, also build the uploadable app bundle:
+For a Google Play release candidate, prefer the scripted preflight modes:
 
 ```bash
-./gradlew :android:bundleRelease
-npm run export:play-store-metadata
-npm run verify:play-store-ready
+npm run preflight:play-store:source
+npm run preflight:play-store
+npm run preflight:play-store:full
 ```
+
+Use `preflight:play-store:source` before upload signing exists, `preflight:play-store` after upload signing is configured but no Android device is attached, and `preflight:play-store:full` for the final local release-candidate gate with upload signing and a physical Android smoke run. Each successful preflight writes `build/play-store-release-evidence.json`; the full mode also requires fresh `build/android-device-smoke-evidence.json` from the current debug APK.
 
 For first-time Play upload signing setup, create an ignored local keystore config and back up the generated keystore and password outside the repository:
 
@@ -43,7 +45,7 @@ For first-time Play upload signing setup, create an ignored local keystore confi
 npm run create:upload-keystore
 ```
 
-The helper prompts for the keystore password without echoing it. Run the stricter Play Store gate only when upload signing credentials are available through `android/signing.properties`:
+The helper prompts for the keystore password without echoing it. To verify upload signing directly, run:
 
 ```bash
 ./gradlew :android:verifyPlayStoreRelease
