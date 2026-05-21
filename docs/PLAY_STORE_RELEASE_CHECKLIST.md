@@ -5,6 +5,7 @@ Use this checklist before uploading a production build to Google Play.
 ## Build Gate
 
 - Keep `targetSdk` at or above the current Google Play submission floor. The Android module currently targets SDK 36.
+- Keep the Play package name fixed before first publication: `com.apprenticesoft.epicballadventure`.
 - Build the web and Android release artifacts, then verify Play Store metadata, privacy pages, Android release config, generated store assets, and the uploadable bundle:
 
 ```bash
@@ -34,6 +35,7 @@ The upload key may also be supplied through ignored local Gradle properties with
 ## Play Console Metadata
 
 - App category: Game.
+- Package name: `com.apprenticesoft.epicballadventure`.
 - Data safety: the Android app declares no network or sensitive-data permissions. Local level progress is stored on-device only, and Android cloud backup is disabled in the manifest.
 - Store listing copy: use `docs/PLAY_STORE_LISTING.md` for the app name, short description, full description, release notes, data safety draft, and content rating notes.
 - Fastlane-compatible Play metadata: generated under `fastlane/metadata/android/en-US/`. Regenerate from `docs/PLAY_STORE_LISTING.md` and `docs/play-store-assets/` with `npm run export:play-store-metadata`.

@@ -5,6 +5,7 @@ Use this as the source copy for the first internal testing or production listing
 ## Product Details
 
 - App name: Epic Ball Adventure
+- Package name: com.apprenticesoft.epicballadventure
 - Default language: English (United States)
 - App type: Game
 - Category: Arcade

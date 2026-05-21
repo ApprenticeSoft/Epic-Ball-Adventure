@@ -5,6 +5,8 @@ import path from 'node:path';
 import { PNG } from 'pngjs';
 
 const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
+const expectedApplicationId = 'com.apprenticesoft.epicballadventure';
+const expectedNamespace = 'com.one.button.jam';
 
 const checks = [];
 
@@ -159,6 +161,7 @@ async function checkListingCopy(){
 		'No ads, no accounts, no analytics, and no personal data collection.',
 		'Data collected: No user data collected.',
 		'Data shared: No user data shared.',
+		`Package name: ${expectedApplicationId}`,
 		'Privacy policy: https://ball.marcvidal.ca/privacy.html'
 	]) {
 		if(!listing.includes(required))
@@ -256,6 +259,16 @@ async function checkAndroidConfig(){
 
 	startFailures = failureCount();
 	const buildGradle = await readText('android/build.gradle');
+	for(const required of [
+		`namespace = "${expectedNamespace}"`,
+		`applicationId = "${expectedApplicationId}"`
+	]) {
+		if(!buildGradle.includes(required))
+			fail(`Android build config is missing ${required}`);
+	}
+	passIfNoNewFailures(startFailures, 'Android namespace and Play applicationId are explicit');
+
+	startFailures = failureCount();
 	const targetSdk = numberAfter(buildGradle, /targetSdk\s*=\s*(\d+)/);
 	if(targetSdk == null || targetSdk < 35)
 		fail(`targetSdk must be at least 35, found ${targetSdk ?? 'missing'}`);
@@ -312,6 +325,17 @@ async function checkAndroidBundleArtifact(){
 	passIfNoNewFailures(startFailures, 'release AAB contains manifest, code, adaptive launcher icon, and gameplay assets');
 
 	startFailures = failureCount();
+	const bundleMetadata = await readJson('android/build/intermediates/bundle_ide_model/release/produceReleaseBundleIdeListingFile/output-metadata.json');
+	if(bundleMetadata.applicationId !== expectedApplicationId)
+		fail(`release bundle metadata applicationId is ${bundleMetadata.applicationId}; expected ${expectedApplicationId}`);
+	const mergedManifest = await readText('android/build/intermediates/bundle_manifest/release/processApplicationManifestReleaseForBundle/AndroidManifest.xml');
+	if(!mergedManifest.includes(`package="${expectedApplicationId}"`))
+		fail(`release bundle manifest package is not ${expectedApplicationId}`);
+	if(!mergedManifest.includes(`android:name="${expectedApplicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"`))
+		fail('release bundle manifest dynamic permission does not use the Play applicationId');
+	passIfNoNewFailures(startFailures, 'release bundle metadata and manifest use the final Play applicationId');
+
+	startFailures = failureCount();
 	for(const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
 		for(const library of ['libgdx.so', 'libgdx-box2d.so', 'libgdx-freetype.so']) {
 			const entry = `base/lib/${abi}/${library}`;
@@ -337,6 +361,10 @@ async function readPng(relativePath){
 
 async function readText(relativePath){
 	return await readFile(path.join(rootDir, relativePath), 'utf8');
+}
+
+async function readJson(relativePath){
+	return JSON.parse(await readText(relativePath));
 }
 
 async function expectTextFile(relativePath, expected){
