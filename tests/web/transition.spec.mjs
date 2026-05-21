@@ -134,6 +134,53 @@ test('auto-advances through every level without a black screen', async ({ page }
   }
 });
 
+test('Escape returns from gameplay to a continue menu without resetting progress', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Desktop keyboard coverage is enough for gameplay menu return.');
+
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if (message.type() === 'error') {
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1&ballStartLevel=2');
+    await waitForDebugEvent(page, logs, 'main menu layout', 10000);
+    await startGame(page, testInfo.project.name);
+    await waitForDebugEvent(page, logs, 'GameScreen construct begin level=2', 10000);
+
+    const gameStartCount = (await getDebugEvents(page))
+      .filter(line => line.includes('GameScreen construct begin level=2')).length;
+    const menuLayoutCount = (await getDebugEvents(page))
+      .filter(line => line.includes('main menu layout')).length;
+
+    await page.keyboard.press('Escape');
+    await waitForDebugEvent(page, logs, 'return to main menu during gameplay level=2', 10000);
+    await waitForDebugEventCount(page, 'main menu layout', menuLayoutCount + 1, 10000);
+    const menuLayout = parseMenuLayoutEvent(await latestDebugEvent(page, 'main menu layout'));
+    expect(menuLayout.startText).toBe('Press F to continue');
+
+    await page.keyboard.press('F');
+    await waitForDebugEventCount(page, 'GameScreen construct begin level=2', gameStartCount + 1, 10000);
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
 test('responsive UI elements fit portrait and landscape screens', async ({ page }, testInfo) => {
   const logs = [];
   const errors = [];

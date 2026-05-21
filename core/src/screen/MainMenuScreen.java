@@ -150,6 +150,7 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void show() {
+		Gdx.input.setCatchKey(Keys.BACK, privacyOpen);
 		Gdx.input.setInputProcessor(this);
 	}
 
@@ -275,6 +276,7 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 	private void setPrivacyOpen(boolean open){
 		privacyOpen = open;
+		Gdx.input.setCatchKey(Keys.BACK, open);
 		privacyPanel.setVisible(open);
 	}
 
@@ -294,6 +296,7 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void hide() {
+		Gdx.input.setCatchKey(Keys.BACK, false);
 	}
 
 	@Override

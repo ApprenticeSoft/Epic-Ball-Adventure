@@ -304,6 +304,7 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void show() {
+		Gdx.input.setCatchKey(Keys.BACK, true);
 		if(waterTuningStage != null)
 			Gdx.input.setInputProcessor(new InputMultiplexer(waterTuningStage, this));
 		else
@@ -474,6 +475,7 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void hide() {
+		Gdx.input.setCatchKey(Keys.BACK, false);
 	}
 
 	@Override
@@ -994,12 +996,15 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public boolean keyDown(int keycode) {
-		if(editorReturnScreen != null && keycode == Keys.ESCAPE){
-			returnToEditor();
+		if(keycode == Keys.ESCAPE || keycode == Keys.BACK){
+			if(editorReturnScreen != null)
+				returnToEditor();
+			else
+				returnToMainMenu(gameCompleted);
 			return true;
 		}
 		if(gameCompleted && keycode == Keys.SPACE){
-			returnToMainMenu();
+			returnToMainMenu(true);
 			return true;
 		}
 		return false;
@@ -1008,17 +1013,22 @@ public class GameScreen extends InputAdapter implements Screen{
 	@Override
 	public boolean touchDown(int screenX, int screenY, int pointer, int button) {
 		if(gameCompleted){
-			returnToMainMenu();
+			returnToMainMenu(true);
 			return true;
 		}
 		return false;
 	}
 
-	private void returnToMainMenu(){
-		DebugConfig.log("return to main menu after game complete");
+	private void returnToMainMenu(boolean resetProgress){
+		if(resetProgress)
+			DebugConfig.log("return to main menu after game complete");
+		else
+			DebugConfig.log("return to main menu during gameplay level=" + Variables.niveauSelectione);
 		DebugConfig.autoAdvanceLevels = false;
-		Data.setLevel(1);
-		Variables.niveauSelectione = 1;
+		if(resetProgress){
+			Data.setLevel(1);
+			Variables.niveauSelectione = 1;
+		}
 		Variables.levelComplete = false;
 		Variables.restart = false;
 		Variables.fallRestartDelay = 2.136f;
