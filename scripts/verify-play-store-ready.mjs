@@ -380,6 +380,9 @@ async function checkAndroidConfig(){
 		'com.apprenticesoft.epicballadventure',
 		'--skip-version-check',
 		'PNG.sync.read',
+		'resolveAdbCommand',
+		'local.properties',
+		'platform-tools',
 		'visibleRatio',
 		'expectedVersion',
 		'screencap'

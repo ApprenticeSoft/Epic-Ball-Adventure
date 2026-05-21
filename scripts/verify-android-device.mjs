@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { PNG } from 'pngjs';
 const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
 const options = parseArgs(process.argv.slice(2));
 const defaultPackageId = 'com.apprenticesoft.epicballadventure';
+const adbCommand = resolveAdbCommand();
 
 if(options.help) {
 	console.log(`Usage: npm run verify:android-device -- [options]
@@ -123,9 +124,9 @@ function requiredValue(args, index, option){
 }
 
 function selectDevice(serial){
-	const version = spawnSync('adb', ['version'], { encoding: 'utf8' });
+	const version = spawnSync(adbCommand, ['version'], { encoding: 'utf8' });
 	if(version.error?.code === 'ENOENT')
-		fail('adb is not installed or not on PATH');
+		fail('adb is not installed or not found in PATH, ANDROID_HOME, ANDROID_SDK_ROOT, or local.properties sdk.dir');
 	if(version.status !== 0)
 		fail(`adb version failed: ${version.stderr || version.stdout}`);
 
@@ -144,7 +145,7 @@ function selectDevice(serial){
 }
 
 function adbDevices(){
-	const result = spawnSync('adb', ['devices'], { encoding: 'utf8' });
+	const result = spawnSync(adbCommand, ['devices'], { encoding: 'utf8' });
 	if(result.status !== 0)
 		fail(`adb devices failed: ${result.stderr || result.stdout}`);
 	return result.stdout.split('\n')
@@ -162,7 +163,7 @@ function activeDeviceSerial(){
 }
 
 function runAdb(args, options = {}){
-	const result = spawnSync('adb', [...adbPrefix, ...args], {
+	const result = spawnSync(adbCommand, [...adbPrefix, ...args], {
 		cwd: rootDir,
 		encoding: options.buffer ? null : 'utf8',
 		stdio: options.inherit ? 'inherit' : 'pipe',
@@ -173,6 +174,37 @@ function runAdb(args, options = {}){
 	if(result.status !== 0)
 		fail(`adb ${args.join(' ')} failed${result.stderr ? `: ${result.stderr}` : ''}`);
 	return result;
+}
+
+function resolveAdbCommand(){
+	const candidates = ['adb'];
+	for(const sdkDir of androidSdkDirs()) {
+		const executable = process.platform === 'win32' ? 'adb.exe' : 'adb';
+		candidates.push(path.join(sdkDir, 'platform-tools', executable));
+	}
+	for(const candidate of candidates) {
+		const result = spawnSync(candidate, ['version'], { encoding: 'utf8' });
+		if(result.status === 0)
+			return candidate;
+	}
+	return 'adb';
+}
+
+function androidSdkDirs(){
+	const sdkDirs = [];
+	for(const value of [process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT, localSdkDir()]) {
+		if(value && !sdkDirs.includes(value))
+			sdkDirs.push(value);
+	}
+	return sdkDirs;
+}
+
+function localSdkDir(){
+	const propertiesPath = path.join(rootDir, 'local.properties');
+	if(!existsSync(propertiesPath))
+		return '';
+	const properties = parseJavaProperties(readFileSync(propertiesPath, 'utf8'));
+	return properties['sdk.dir'] || '';
 }
 
 function shellTrim(args){
@@ -255,6 +287,31 @@ function assertInstalledVersion(installed, expected){
 		fail(`Installed versionCode is ${installed.versionCode || 'missing'}; expected ${expected.versionCode}`);
 	if(expected.versionName && installed.versionName !== expected.versionName)
 		fail(`Installed versionName is ${installed.versionName || 'missing'}; expected ${expected.versionName}`);
+}
+
+function parseJavaProperties(text){
+	const properties = {};
+	for(const rawLine of text.split(/\r?\n/)) {
+		const line = rawLine.trim();
+		if(!line || line.startsWith('#') || line.startsWith('!'))
+			continue;
+		const separator = line.search(/(?<!\\)[=:]/);
+		const key = separator === -1 ? line : line.slice(0, separator);
+		const value = separator === -1 ? '' : line.slice(separator + 1);
+		properties[unescapeJavaProperty(key.trim())] = unescapeJavaProperty(value.trim());
+	}
+	return properties;
+}
+
+function unescapeJavaProperty(value){
+	return value.replace(/\\([\\nrt:=#!])/g, (_, character) => {
+		switch(character) {
+		case 'n': return '\n';
+		case 'r': return '\r';
+		case 't': return '\t';
+		default: return character;
+		}
+	});
 }
 
 function textAfter(text, pattern){

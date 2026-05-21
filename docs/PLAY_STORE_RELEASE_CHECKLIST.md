@@ -98,7 +98,7 @@ The full preflight includes the physical Android smoke test against `android/bui
 npm run verify:android-device
 ```
 
-This installs `android/build/outputs/apk/debug/android-debug.apk`, launches the game, verifies the installed version metadata, captures a nonblank PNG screenshot, and writes ignored device evidence to `build/android-device-smoke-evidence.json` and `build/android-device-smoke.png`. To test a different APK, pass `-- --apk /path/to/app.apk`; use `--skip-version-check` only when intentionally testing an APK that does not match `android/build.gradle`.
+This installs `android/build/outputs/apk/debug/android-debug.apk`, launches the game, verifies the installed version metadata, captures a nonblank PNG screenshot, and writes ignored device evidence to `build/android-device-smoke-evidence.json` and `build/android-device-smoke.png`. The verifier resolves `adb` from `PATH`, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, or `local.properties` `sdk.dir`. To test a different APK, pass `-- --apk /path/to/app.apk`; use `--skip-version-check` only when intentionally testing an APK that does not match `android/build.gradle`.
 
 ## References
 
