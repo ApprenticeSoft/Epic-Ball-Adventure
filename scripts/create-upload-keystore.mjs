@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
@@ -21,6 +21,7 @@ if(existsSync(storeFile) && !overwrite)
 
 mkdirSync(path.dirname(storeFile), { recursive: true });
 mkdirSync(path.dirname(propertiesFile), { recursive: true });
+chmodSync(path.dirname(storeFile), 0o700);
 
 const result = spawnSync('keytool', [
 	'-genkeypair',
@@ -41,6 +42,7 @@ const result = spawnSync('keytool', [
 
 if(result.status !== 0)
 	throw new Error(`keytool failed:\n${result.stderr || result.stdout}`);
+chmodSync(storeFile, 0o600);
 
 writeFileSync(propertiesFile, [
 	'# Local upload-signing config for Epic Ball Adventure. Do not commit this file.',
@@ -50,6 +52,7 @@ writeFileSync(propertiesFile, [
 	`EPIC_BALL_UPLOAD_KEY_PASSWORD=${javaPropertiesValue(keyPassword)}`,
 	''
 ].join('\n'), 'utf8');
+chmodSync(propertiesFile, 0o600);
 
 console.log(`Created upload keystore at ${path.relative(rootDir, storeFile)}`);
 console.log(`Wrote local signing properties to ${path.relative(rootDir, propertiesFile)}`);

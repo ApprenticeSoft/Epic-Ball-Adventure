@@ -336,6 +336,7 @@ async function checkAndroidConfig(){
 	}
 	await expectTextIncludes('scripts/create-upload-keystore.mjs', [
 		'keytool',
+		'chmodSync',
 		'android/keystores/upload.jks',
 		'android/signing.properties',
 		'EPIC_BALL_UPLOAD_STORE_PASSWORD',
