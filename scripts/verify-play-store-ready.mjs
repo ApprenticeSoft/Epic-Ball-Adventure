@@ -315,6 +315,12 @@ async function checkAndroidConfig(){
 	const packageJson = await readJson('package.json');
 	if(packageJson.scripts?.['create:upload-keystore'] !== 'node scripts/create-upload-keystore.mjs')
 		fail('package.json is missing create:upload-keystore script');
+	if(packageJson.scripts?.['export:play-store-evidence'] !== 'node scripts/export-play-store-evidence.mjs')
+		fail('package.json is missing export:play-store-evidence script');
+	if(packageJson.scripts?.['preflight:play-store'] !== 'node scripts/run-play-store-preflight.mjs')
+		fail('package.json is missing preflight:play-store script');
+	if(packageJson.scripts?.['preflight:play-store:source'] !== 'node scripts/run-play-store-preflight.mjs --skip-upload-signing')
+		fail('package.json is missing preflight:play-store:source script');
 	const gitignore = await readText('.gitignore');
 	for(const required of [
 		'*.jks',
@@ -332,7 +338,19 @@ async function checkAndroidConfig(){
 		'promptHidden',
 		'setRawMode'
 	]);
-	passIfNoNewFailures(startFailures, 'upload signing helper and ignored local signing config are present');
+	await expectTextIncludes('scripts/run-play-store-preflight.mjs', [
+		'export:play-store-evidence',
+		'verify:play-store-live',
+		'test:web-transition',
+		':android:verifyPlayStoreRelease'
+	]);
+	await expectTextIncludes('scripts/export-play-store-evidence.mjs', [
+		'build/play-store-release-evidence.json',
+		'android/build/outputs/bundle/release/android-release.aab',
+		'sha256',
+		'docs/PLAY_CONSOLE_APP_CONTENT.md'
+	]);
+	passIfNoNewFailures(startFailures, 'upload signing helper, preflight scripts, and ignored local signing config are present');
 }
 
 async function checkAndroidBundleArtifact(){

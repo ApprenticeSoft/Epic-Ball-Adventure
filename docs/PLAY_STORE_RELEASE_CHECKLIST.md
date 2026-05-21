@@ -27,6 +27,12 @@ This runs the build, metadata export, local readiness verifier, live privacy URL
 npm run preflight:play-store:source
 ```
 
+- Each successful preflight writes an ignored release evidence manifest with artifact sizes, SHA-256 hashes, version metadata, git state, Play metadata paths, and policy file hashes:
+
+```bash
+build/play-store-release-evidence.json
+```
+
 - The uploadable Android App Bundle is written to:
 
 ```bash

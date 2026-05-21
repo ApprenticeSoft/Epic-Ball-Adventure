@@ -72,6 +72,12 @@ if(!skipUploadSigning) {
 	});
 }
 
+steps.push({
+	name: 'Export release evidence manifest',
+	command: 'npm',
+	args: ['run', 'export:play-store-evidence']
+});
+
 console.log('Google Play preflight');
 console.log(skipUploadSigning
 	? 'Mode: source-side gate. Upload signing is intentionally skipped.'
@@ -116,6 +122,7 @@ if(failedStep) {
 }
 
 console.log('PASS automated Play Store preflight gates completed.');
+console.log('Release evidence: build/play-store-release-evidence.json');
 console.log('Manual before production promotion: upload the AAB in Play Console, complete App content forms from docs/PLAY_CONSOLE_APP_CONTENT.md, and install the release on a physical Android device.');
 
 function formatCommand(command, commandArgs){
