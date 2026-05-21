@@ -942,6 +942,7 @@ public class GameScreen extends InputAdapter implements Screen{
 			return;
 		nextLevelQueued = true;
 		int nextLevel = LevelProgression.nextLevel(Variables.niveauSelectione, Variables.nombreNiveaux);
+		Data.setLevel(nextLevel);
 		DebugConfig.log("queue next level from=" + Variables.niveauSelectione + " to=" + nextLevel
 				+ " elapsed=" + transitionElapsed);
 		Gdx.app.postRunnable(new Runnable() {
@@ -1016,6 +1017,7 @@ public class GameScreen extends InputAdapter implements Screen{
 	private void returnToMainMenu(){
 		DebugConfig.log("return to main menu after game complete");
 		DebugConfig.autoAdvanceLevels = false;
+		Data.setLevel(1);
 		Variables.niveauSelectione = 1;
 		Variables.levelComplete = false;
 		Variables.restart = false;

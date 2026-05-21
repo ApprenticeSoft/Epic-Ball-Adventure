@@ -70,9 +70,9 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 
 		mobileStartText = Gdx.app.getType() == ApplicationType.Android || PlatformInfo.mobileBrowser;
 		if(mobileStartText)
-			labelStart = new Label("Touch to Start", labelStyleStart);
+			labelStart = new Label(Variables.niveauSelectione > 1 ? "Touch to Continue" : "Touch to Start", labelStyleStart);
 		else
-			labelStart = new Label("Press F to start", labelStyleStart);
+			labelStart = new Label(Variables.niveauSelectione > 1 ? "Press F to continue" : "Press F to start", labelStyleStart);
 
 		transitionImage = new Image(skin.getDrawable("WhiteSquare"));
 		transitionImage.setColor(new Color(237/256f, 27/256f, 81/256f,1));

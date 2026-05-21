@@ -16,8 +16,7 @@ public class MyGdxGame extends Game implements ApplicationListener {
 
 	@Override
 	public void create () {
-		//Data.Load();
-		//Data.setLevel(1);
+		Data.Load();
 
 		batch = new SpriteBatch();
 		assets = new AssetManager();
@@ -27,6 +26,8 @@ public class MyGdxGame extends Game implements ApplicationListener {
 					+ " autoAdvance=" + DebugConfig.autoAdvanceLevels
 					+ " delay=" + DebugConfig.autoAdvanceDelay);
 		}
+		else
+			Variables.niveauSelectione = Data.getLevel(Variables.nombreNiveaux);
 
 		this.setScreen(new LoadingScreen(this));
 	}

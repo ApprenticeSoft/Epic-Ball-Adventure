@@ -14,6 +14,15 @@ public final class LevelProgression {
 		return currentLevel + 1;
 	}
 
+	public static int clampLevel(int level, int maxLevel){
+		int safeMax = Math.max(1, maxLevel);
+		if(level < 1)
+			return 1;
+		if(level > safeMax)
+			return safeMax;
+		return level;
+	}
+
 	public static boolean transitionComplete(float elapsed, float duration){
 		return elapsed >= duration;
 	}

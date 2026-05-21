@@ -29,6 +29,15 @@ class LevelProgressionTest {
 	}
 
 	@Test
+	void clampsPersistedLevelToAvailableRange(){
+		assertEquals(1, LevelProgression.clampLevel(-3, 5));
+		assertEquals(1, LevelProgression.clampLevel(0, 5));
+		assertEquals(3, LevelProgression.clampLevel(3, 5));
+		assertEquals(5, LevelProgression.clampLevel(99, 5));
+		assertEquals(1, LevelProgression.clampLevel(99, 0));
+	}
+
+	@Test
 	void transitionTimingCannotStallPastDuration(){
 		assertFalse(LevelProgression.transitionComplete(1.34f, 1.35f));
 		assertTrue(LevelProgression.transitionComplete(1.35f, 1.35f));
