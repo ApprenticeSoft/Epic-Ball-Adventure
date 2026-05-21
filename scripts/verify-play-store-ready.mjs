@@ -321,6 +321,8 @@ async function checkAndroidConfig(){
 		fail('package.json is missing preflight:play-store script');
 	if(packageJson.scripts?.['preflight:play-store:source'] !== 'node scripts/run-play-store-preflight.mjs --skip-upload-signing')
 		fail('package.json is missing preflight:play-store:source script');
+	if(packageJson.scripts?.['verify:android-device'] !== 'node scripts/verify-android-device.mjs')
+		fail('package.json is missing verify:android-device script');
 	const gitignore = await readText('.gitignore');
 	for(const required of [
 		'*.jks',
@@ -350,7 +352,14 @@ async function checkAndroidConfig(){
 		'sha256',
 		'docs/PLAY_CONSOLE_APP_CONTENT.md'
 	]);
-	passIfNoNewFailures(startFailures, 'upload signing helper, preflight scripts, and ignored local signing config are present');
+	await expectTextIncludes('scripts/verify-android-device.mjs', [
+		'android/build/outputs/apk/debug/android-debug.apk',
+		'build/android-device-smoke-evidence.json',
+		'build/android-device-smoke.png',
+		'com.apprenticesoft.epicballadventure',
+		'screencap'
+	]);
+	passIfNoNewFailures(startFailures, 'upload signing helper, preflight scripts, device smoke script, and ignored local signing config are present');
 }
 
 async function checkAndroidBundleArtifact(){

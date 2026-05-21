@@ -86,7 +86,13 @@ Do not commit keystores, passwords, local signing properties, or generated bundl
 npm run preflight:play-store
 ```
 
-Install the generated release build on at least one physical Android device before promoting it from internal testing.
+Install the generated build on at least one physical Android device before promoting it from internal testing. With one authorized USB-debugging device connected, run:
+
+```bash
+npm run verify:android-device
+```
+
+This installs `android/build/outputs/apk/debug/android-debug.apk`, launches the game, captures a screenshot, and writes ignored device evidence to `build/android-device-smoke-evidence.json` and `build/android-device-smoke.png`. To test a different APK, pass `-- --apk /path/to/app.apk`.
 
 ## References
 

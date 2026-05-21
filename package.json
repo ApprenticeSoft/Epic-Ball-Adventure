@@ -11,6 +11,7 @@
     "preflight:play-store": "node scripts/run-play-store-preflight.mjs",
     "preflight:play-store:source": "node scripts/run-play-store-preflight.mjs --skip-upload-signing",
     "test:web-transition": "playwright test",
+    "verify:android-device": "node scripts/verify-android-device.mjs",
     "verify:play-store-live": "node scripts/verify-play-store-live.mjs",
     "verify:play-store-ready": "node scripts/verify-play-store-ready.mjs"
   },
