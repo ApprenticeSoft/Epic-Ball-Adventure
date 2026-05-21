@@ -344,6 +344,13 @@ async function checkAndroidBundleArtifact(){
 		}
 	}
 	passIfNoNewFailures(startFailures, 'release AAB packages LibGDX native libraries for arm64-v8a, armeabi-v7a, and x86_64');
+
+	startFailures = failureCount();
+	for(const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
+		for(const library of ['libgdx.so', 'libgdx-box2d.so', 'libgdx-freetype.so'])
+			expectNativeLoadAlignment(`android/build/intermediates/stripped_native_libs/release/stripReleaseDebugSymbols/out/lib/${abi}/${library}`, 0x4000);
+	}
+	passIfNoNewFailures(startFailures, 'release native libraries use 16 KB ELF load alignment for Android 15+ devices');
 }
 
 async function readPng(relativePath){
@@ -454,6 +461,37 @@ function zipEntries(filePath){
 	if(result.status !== 0)
 		throw new Error(`Could not inspect ${path.relative(rootDir, filePath)} with unzip: ${result.stderr || result.stdout}`);
 	return result.stdout.split('\n').map(line => line.trim()).filter(Boolean);
+}
+
+function expectNativeLoadAlignment(relativePath, minimumAlignment){
+	const absolutePath = path.join(rootDir, relativePath);
+	if(!existsSync(absolutePath)) {
+		fail(`${relativePath} is missing; run ./gradlew :android:bundleRelease before final Play verification`);
+		return;
+	}
+
+	const result = spawnSync('readelf', ['--wide', '-l', absolutePath], {
+		encoding: 'utf8',
+		maxBuffer: 1024 * 1024
+	});
+	if(result.status !== 0) {
+		fail(`Could not inspect ${relativePath} with readelf: ${result.stderr || result.stdout || result.error?.message}`);
+		return;
+	}
+
+	const alignments = result.stdout.split('\n')
+		.filter(line => line.trim().startsWith('LOAD'))
+		.map(line => line.trim().split(/\s+/).at(-1))
+		.map(value => Number.parseInt(value, 16))
+		.filter(Number.isFinite);
+	if(alignments.length === 0) {
+		fail(`${relativePath} has no LOAD segments in readelf output`);
+		return;
+	}
+	for(const alignment of alignments) {
+		if(alignment < minimumAlignment)
+			fail(`${relativePath} has LOAD alignment 0x${alignment.toString(16)}; expected at least 0x${minimumAlignment.toString(16)}`);
+	}
 }
 
 function formatMiB(bytes){

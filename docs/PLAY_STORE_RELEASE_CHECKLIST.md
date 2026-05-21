@@ -6,6 +6,7 @@ Use this checklist before uploading a production build to Google Play.
 
 - Keep `targetSdk` at or above the current Google Play submission floor. The Android module currently targets SDK 36.
 - Keep the Play package name fixed before first publication: `com.apprenticesoft.epicballadventure`.
+- Keep native LibGDX libraries compatible with Android 15+ 16 KB page-size devices. `npm run verify:play-store-ready` checks the release `.so` files for at least `0x4000` ELF load alignment.
 - Build the web and Android release artifacts, then verify Play Store metadata, privacy pages, Android release config, generated store assets, and the uploadable bundle:
 
 ```bash
@@ -67,3 +68,4 @@ Install the generated release build on at least one physical Android device befo
 - Google Play user data and privacy policy requirements: https://support.google.com/googleplay/android-developer/answer/10144311
 - Google Play Data safety form: https://support.google.com/googleplay/android-developer/answer/10787469
 - Google Play preview asset requirements: https://support.google.com/googleplay/android-developer/answer/1078870
+- Android 16 KB page-size compatibility: https://developer.android.com/guide/practices/page-sizes
