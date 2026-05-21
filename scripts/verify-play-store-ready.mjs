@@ -255,7 +255,7 @@ async function checkAndroidConfig(){
 		if(!manifest.includes(required))
 			fail(`Android manifest is missing ${required}`);
 	}
-	passIfNoNewFailures(startFailures, 'Android manifest has game metadata, disabled backup, and no declared permissions');
+	passIfNoNewFailures(startFailures, 'source Android manifest has game metadata, disabled backup, and no declared permissions');
 
 	startFailures = failureCount();
 	const buildGradle = await readText('android/build.gradle');
@@ -334,6 +334,17 @@ async function checkAndroidBundleArtifact(){
 	if(!mergedManifest.includes(`android:name="${expectedApplicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"`))
 		fail('release bundle manifest dynamic permission does not use the Play applicationId');
 	passIfNoNewFailures(startFailures, 'release bundle metadata and manifest use the final Play applicationId');
+
+	startFailures = failureCount();
+	const allowedMergedPermissions = new Set([
+		`${expectedApplicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
+	]);
+	const mergedPermissions = extractUsesPermissions(mergedManifest);
+	for(const permission of mergedPermissions) {
+		if(!allowedMergedPermissions.has(permission))
+			fail(`release bundle manifest declares unexpected permission: ${permission}`);
+	}
+	passIfNoNewFailures(startFailures, 'release bundle manifest declares only the package-scoped AndroidX signature permission');
 
 	startFailures = failureCount();
 	for(const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
@@ -461,6 +472,10 @@ function zipEntries(filePath){
 	if(result.status !== 0)
 		throw new Error(`Could not inspect ${path.relative(rootDir, filePath)} with unzip: ${result.stderr || result.stdout}`);
 	return result.stdout.split('\n').map(line => line.trim()).filter(Boolean);
+}
+
+function extractUsesPermissions(manifest){
+	return Array.from(manifest.matchAll(/<uses-permission(?:-[^\s>]*)?\s+[^>]*android:name="([^"]+)"/g), match => match[1]);
 }
 
 function expectNativeLoadAlignment(relativePath, minimumAlignment){
