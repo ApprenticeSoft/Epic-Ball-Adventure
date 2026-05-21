@@ -45,6 +45,10 @@ tmp/
 *.swp
 *~.nib
 local.properties
+*.jks
+*.keystore
+*.p12
+android/keystores/
 .settings/
 .loadpath
 .externalToolBuilders/

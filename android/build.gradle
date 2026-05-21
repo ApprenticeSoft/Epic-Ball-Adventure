@@ -4,6 +4,23 @@ configurations {
     natives
 }
 
+def releaseSecret = { name ->
+    def value = findProperty(name)
+    if (value == null || value.toString().trim().isEmpty()) {
+        value = System.getenv(name)
+    }
+    value == null || value.toString().trim().isEmpty() ? null : value.toString()
+}
+
+def uploadStoreFile = releaseSecret("EPIC_BALL_UPLOAD_STORE_FILE")
+def uploadStorePassword = releaseSecret("EPIC_BALL_UPLOAD_STORE_PASSWORD")
+def uploadKeyAlias = releaseSecret("EPIC_BALL_UPLOAD_KEY_ALIAS")
+def uploadKeyPassword = releaseSecret("EPIC_BALL_UPLOAD_KEY_PASSWORD")
+def uploadSigningReady = uploadStoreFile != null
+        && uploadStorePassword != null
+        && uploadKeyAlias != null
+        && uploadKeyPassword != null
+
 android {
     namespace = "com.one.button.jam"
     compileSdk = 36
@@ -28,6 +45,17 @@ android {
         }
     }
 
+    signingConfigs {
+        upload {
+            if (uploadSigningReady) {
+                storeFile = file(uploadStoreFile)
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -36,6 +64,9 @@ android {
     buildTypes {
         release {
             minifyEnabled = false
+            if (uploadSigningReady) {
+                signingConfig = signingConfigs.upload
+            }
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-project.txt"
         }
         debug {
@@ -98,6 +129,31 @@ tasks.register("copyAndroidNatives") {
 
 tasks.named("preBuild").configure {
     dependsOn("copyAndroidNatives")
+}
+
+tasks.register("verifyPlayStoreRelease") {
+    dependsOn("bundleRelease")
+
+    doLast {
+        def errors = []
+        if (android.defaultConfig.targetSdk < 35) {
+            errors.add("targetSdk must be at least 35 for current Google Play submission policy")
+        }
+        if (!uploadSigningReady) {
+            errors.add("release upload signing is not configured; set EPIC_BALL_UPLOAD_STORE_FILE, EPIC_BALL_UPLOAD_STORE_PASSWORD, EPIC_BALL_UPLOAD_KEY_ALIAS, and EPIC_BALL_UPLOAD_KEY_PASSWORD")
+        }
+        if (uploadStoreFile != null && !file(uploadStoreFile).exists()) {
+            errors.add("upload keystore does not exist: ${uploadStoreFile}")
+        }
+        def bundleFile = file("$buildDir/outputs/bundle/release/android-release.aab")
+        if (!bundleFile.exists()) {
+            errors.add("release app bundle was not created at ${bundleFile}")
+        }
+        if (errors.size() > 0) {
+            throw new GradleException("Play Store release verification failed:\n - " + errors.join("\n - "))
+        }
+        println "Play Store release verification passed: ${bundleFile}"
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {

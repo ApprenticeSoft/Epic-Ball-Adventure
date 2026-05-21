@@ -27,6 +27,22 @@ npm run test:web-transition
 
 When changing GWT-compatible code, assets, web entrypoints, water rendering, transitions, or editor behavior, run both commands before deployment.
 
+For a Google Play release candidate, also build the uploadable app bundle:
+
+```bash
+./gradlew :android:bundleRelease
+```
+
+Run the stricter Play Store gate only when upload signing credentials are available:
+
+```bash
+EPIC_BALL_UPLOAD_STORE_FILE=/absolute/path/upload.jks \
+EPIC_BALL_UPLOAD_STORE_PASSWORD=... \
+EPIC_BALL_UPLOAD_KEY_ALIAS=... \
+EPIC_BALL_UPLOAD_KEY_PASSWORD=... \
+./gradlew :android:verifyPlayStoreRelease
+```
+
 ## Deploy To Raspberry Pi
 
 Build the web artifact first:
