@@ -15,6 +15,18 @@ npm run export:play-store-metadata
 npm run verify:play-store-ready
 ```
 
+- The full local release-candidate preflight is:
+
+```bash
+npm run preflight:play-store
+```
+
+This runs the build, metadata export, local readiness verifier, live privacy URL gate, web transition suite, and upload-signing gate. Before upload signing exists, use the source-side gate:
+
+```bash
+npm run preflight:play-store:source
+```
+
 - The uploadable Android App Bundle is written to:
 
 ```bash
@@ -65,11 +77,7 @@ Do not commit keystores, passwords, local signing properties, or generated bundl
 ## Final Checks
 
 ```bash
-./gradlew :core:test :desktop:compileJava :html:dist :android:assembleDebug :android:bundleRelease
-npm run export:play-store-metadata
-npm run verify:play-store-ready
-npm run verify:play-store-live
-npm run test:web-transition
+npm run preflight:play-store
 ```
 
 Install the generated release build on at least one physical Android device before promoting it from internal testing.
