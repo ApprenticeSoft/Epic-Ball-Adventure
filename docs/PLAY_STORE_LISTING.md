@@ -63,6 +63,7 @@ Initial Google Play release.
 
 Generated assets:
 
+- App icon: `docs/play-store-assets/app-icon.png` - 512 x 512 32-bit PNG with alpha.
 - Feature graphic: `docs/play-store-assets/feature-graphic.png` - 1024 x 500 24-bit PNG with no alpha.
 - Phone screenshots: `docs/play-store-assets/phone-screenshots/*.png` - four 1080 x 1920 24-bit PNGs with no alpha.
 - Asset manifest and alt text: `docs/play-store-assets/README.md`.
@@ -70,8 +71,7 @@ Generated assets:
 
 Remaining before launch:
 
-- App icon: existing Android launcher icon, verify against current Google Play icon rules.
-- Upload the generated feature graphic and phone screenshots into Play Console.
+- Upload the generated app icon, feature graphic, and phone screenshots into Play Console.
 
 Screenshot coverage:
 

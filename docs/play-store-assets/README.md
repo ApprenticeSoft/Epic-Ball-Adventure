@@ -6,7 +6,12 @@ Generated from the current `html/build/dist` game build:
 npm run generate:play-store-assets
 ```
 
-All PNGs are written as 24-bit RGB with no alpha channel.
+The app icon is a 32-bit PNG with alpha. Preview graphics are 24-bit RGB PNGs with no alpha channel.
+
+## App Icon
+
+- `app-icon.png` - 512 x 512
+  Alt text: Epic Ball Adventure app icon with a bright rolling ball on a pink platform.
 
 ## Feature Graphic
 

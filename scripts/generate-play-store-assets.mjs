@@ -15,6 +15,11 @@ const baseUrl = `http://127.0.0.1:${port}`;
 const phoneViewport = { width: 1080, height: 1920 };
 const featureViewport = { width: 1024, height: 500 };
 
+const appIcon = {
+	file: 'app-icon.png',
+	alt: 'Epic Ball Adventure app icon with a bright rolling ball on a pink platform.'
+};
+
 const phoneScenes = [
 	{
 		file: '01-level-1-momentum.png',
@@ -167,15 +172,26 @@ async function writeRgbPng(sourceBuffer, outputPath){
 }
 
 async function pngDimensions(filePath){
-	const png = PNG.sync.read(await readFile(filePath));
+	const buffer = await readFile(filePath);
+	const png = PNG.sync.read(buffer);
 	return {
 		width: png.width,
 		height: png.height,
-		colorType: png.colorType
+		colorType: png.colorType,
+		bytes: buffer.length
 	};
 }
 
 async function validateAssets(){
+	const appIconPath = path.join(outputDir, appIcon.file);
+	const appIconDimensions = await pngDimensions(appIconPath);
+	if(appIconDimensions.colorType !== 6)
+		throw new Error(`${path.relative(rootDir, appIconPath)} must be 32-bit RGBA PNG, got colorType ${appIconDimensions.colorType}`);
+	if(appIconDimensions.width !== 512 || appIconDimensions.height !== 512)
+		throw new Error(`${path.relative(rootDir, appIconPath)} must be 512x512`);
+	if(appIconDimensions.bytes > 1024 * 1024)
+		throw new Error(`${path.relative(rootDir, appIconPath)} must be smaller than 1024KB`);
+
 	const featurePath = path.join(outputDir, featureGraphic.file);
 	const featureDimensions = await pngDimensions(featurePath);
 	validateRgbPng(featurePath, featureDimensions);
@@ -210,7 +226,12 @@ async function writeManifest(){
 		'npm run generate:play-store-assets',
 		'```',
 		'',
-		'All PNGs are written as 24-bit RGB with no alpha channel.',
+		'The app icon is a 32-bit PNG with alpha. Preview graphics are 24-bit RGB PNGs with no alpha channel.',
+		'',
+		'## App Icon',
+		'',
+		`- \`${appIcon.file}\` - 512 x 512`,
+		`  Alt text: ${appIcon.alt}`,
 		'',
 		'## Feature Graphic',
 		'',

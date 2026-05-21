@@ -30,6 +30,7 @@ The upload key may also be supplied through ignored local Gradle properties with
 - Store listing copy: use `docs/PLAY_STORE_LISTING.md` for the app name, short description, full description, release notes, data safety draft, and content rating notes.
 - Privacy policy: the source policy lives at `docs/PRIVACY_POLICY.md`, the in-game main menu exposes the same policy text, and the web build publishes `html/webapp/privacy.html` as `/privacy.html`. Use `https://ball.marcvidal.ca/privacy.html` in Play Console after redeploying the web build.
 - Store preview assets: generated under `docs/play-store-assets/`.
+  - App icon: `docs/play-store-assets/app-icon.png`.
   - Feature graphic: `docs/play-store-assets/feature-graphic.png`.
   - Phone screenshots: `docs/play-store-assets/phone-screenshots/*.png`.
   - Regenerate from the current web build with `npm run generate:play-store-assets`.
