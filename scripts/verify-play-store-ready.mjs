@@ -367,6 +367,7 @@ async function checkAndroidConfig(){
 		'keytool',
 		'storepass:env',
 		'androidDeviceSmoke',
+		'Device smoke evidence is missing screenshot image statistics',
 		'android/build/outputs/apk/release/android-release.apk',
 		'android/build/outputs/bundle/release/android-release.aab',
 		'sha256',
@@ -377,6 +378,10 @@ async function checkAndroidConfig(){
 		'build/android-device-smoke-evidence.json',
 		'build/android-device-smoke.png',
 		'com.apprenticesoft.epicballadventure',
+		'--skip-version-check',
+		'PNG.sync.read',
+		'visibleRatio',
+		'expectedVersion',
 		'screencap'
 	]);
 	passIfNoNewFailures(startFailures, 'upload signing helper, preflight scripts, device smoke script, and ignored local signing config are present');

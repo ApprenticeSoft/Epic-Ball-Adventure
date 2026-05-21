@@ -272,6 +272,10 @@ async function androidDeviceSmokeEvidence(apkEvidenceList, required, expectedApk
 		reasons.push(`Device smoke APK SHA-256 does not match the current ${matchedApk.path}`);
 	if(screenshotFile && smoke.screenshot?.sha256 !== screenshotFile.sha256)
 		reasons.push('Device smoke screenshot SHA-256 does not match the current screenshot file');
+	if(!smoke.screenshot?.image)
+		reasons.push('Device smoke evidence is missing screenshot image statistics');
+	else if(Number(smoke.screenshot.image.visibleRatio || 0) < 0.02)
+		reasons.push(`Device smoke screenshot appears blank or black: visibleRatio=${smoke.screenshot.image.visibleRatio}`);
 	if(!smoke.device?.serial)
 		reasons.push('Device smoke evidence is missing the Android device serial');
 	if(!smoke.launch?.pid)
