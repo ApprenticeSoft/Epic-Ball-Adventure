@@ -7,6 +7,7 @@ const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
 const outputPath = path.join(rootDir, 'build/play-store-release-evidence.json');
 const buildGradle = await readText('android/build.gradle');
 const requireAndroidDeviceEvidence = process.env.EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE === '1';
+const expectedAndroidDeviceApk = normalizeRelativePath(process.env.EPIC_BALL_EXPECT_ANDROID_DEVICE_APK || '');
 
 const evidence = {
 	generatedAt: new Date().toISOString(),
@@ -47,7 +48,11 @@ for(const required of [
 
 evidence.artifacts.releaseBundle = await fileEvidence('android/build/outputs/bundle/release/android-release.aab');
 evidence.artifacts.debugApk = await fileEvidence('android/build/outputs/apk/debug/android-debug.apk');
-evidence.androidDeviceSmoke = await androidDeviceSmokeEvidence(evidence.artifacts.debugApk, requireAndroidDeviceEvidence);
+evidence.artifacts.releaseApk = await optionalFileEvidence('android/build/outputs/apk/release/android-release.apk');
+evidence.androidDeviceSmoke = await androidDeviceSmokeEvidence([
+	evidence.artifacts.debugApk,
+	evidence.artifacts.releaseApk
+], requireAndroidDeviceEvidence, expectedAndroidDeviceApk);
 
 evidence.playMetadata.fastlane = await groupEvidence('fastlane/metadata/android/en-US', [
 	'title.txt',
@@ -95,6 +100,17 @@ async function fileEvidence(relativePath){
 	};
 }
 
+async function optionalFileEvidence(relativePath){
+	try {
+		return await fileEvidence(relativePath);
+	}
+	catch(error) {
+		if(error.message.startsWith(`${relativePath} is missing;`))
+			return null;
+		throw error;
+	}
+}
+
 async function groupEvidence(baseRelativePath, fileRelativePaths){
 	const files = {};
 	for(const fileRelativePath of fileRelativePaths) {
@@ -108,7 +124,7 @@ async function groupEvidence(baseRelativePath, fileRelativePaths){
 	};
 }
 
-async function androidDeviceSmokeEvidence(debugApkEvidence, required){
+async function androidDeviceSmokeEvidence(apkEvidenceList, required, expectedApkPath){
 	const evidencePath = 'build/android-device-smoke-evidence.json';
 	const screenshotPath = 'build/android-device-smoke.png';
 	const rawEvidence = await readFile(path.join(rootDir, evidencePath), 'utf8').catch(error => {
@@ -118,9 +134,10 @@ async function androidDeviceSmokeEvidence(debugApkEvidence, required){
 	});
 	if(rawEvidence == null) {
 		if(required)
-			throw new Error(`${evidencePath} is missing; run npm run verify:android-device before exporting full release evidence`);
+			throw new Error(`${evidencePath} is missing; run npm run verify:android-device -- --apk ${expectedApkPath || 'android/build/outputs/apk/debug/android-debug.apk'} before exporting full release evidence`);
 		return {
 			status: 'not-recorded',
+			expectedApkPath: expectedApkPath || '',
 			evidencePath,
 			screenshotPath
 		};
@@ -146,9 +163,21 @@ async function androidDeviceSmokeEvidence(debugApkEvidence, required){
 		reasons.push(error.message);
 		return null;
 	});
+	const apkEvidence = apkEvidenceList.filter(Boolean);
+	const smokeApkPath = normalizeRelativePath(smoke.apk?.path || '');
+	const expectedApkEvidence = expectedApkPath ? apkEvidence.find(apk => apk.path === expectedApkPath) : null;
+	const matchedApk = expectedApkEvidence
+		|| apkEvidence.find(apk => apk.path === smokeApkPath)
+		|| apkEvidence.find(apk => apk.sha256 === smoke.apk?.sha256);
 
-	if(smoke.apk?.sha256 !== debugApkEvidence.sha256)
-		reasons.push('Device smoke APK SHA-256 does not match the current debug APK');
+	if(expectedApkPath && !expectedApkEvidence)
+		reasons.push(`Expected Android device smoke APK is missing: ${expectedApkPath}`);
+	if(expectedApkPath && smokeApkPath !== expectedApkPath)
+		reasons.push(`Device smoke APK path is ${smokeApkPath || 'missing'}; expected ${expectedApkPath}`);
+	if(!matchedApk)
+		reasons.push('Device smoke APK does not match a current debug or release APK artifact');
+	else if(smoke.apk?.sha256 !== matchedApk.sha256)
+		reasons.push(`Device smoke APK SHA-256 does not match the current ${matchedApk.path}`);
 	if(screenshotFile && smoke.screenshot?.sha256 !== screenshotFile.sha256)
 		reasons.push('Device smoke screenshot SHA-256 does not match the current screenshot file');
 	if(!smoke.device?.serial)
@@ -158,7 +187,9 @@ async function androidDeviceSmokeEvidence(debugApkEvidence, required){
 
 	const result = {
 		status: reasons.length === 0 ? 'recorded' : 'stale-or-invalid',
+		expectedApkPath: expectedApkPath || '',
 		evidenceFile: smokeFile,
+		apk: smoke.apk || {},
 		screenshot: screenshotFile,
 		generatedAt: smoke.generatedAt || '',
 		packageId: smoke.packageId || '',
@@ -171,6 +202,15 @@ async function androidDeviceSmokeEvidence(debugApkEvidence, required){
 	if(required && result.status !== 'recorded')
 		throw new Error(`${evidencePath} is not valid for this release: ${reasons.join('; ')}`);
 	return result;
+}
+
+function normalizeRelativePath(value){
+	if(!value)
+		return '';
+	const normalized = path.isAbsolute(value)
+		? path.relative(rootDir, value)
+		: path.normalize(value);
+	return normalized.replaceAll(path.sep, '/').replace(/^\.\//, '');
 }
 
 async function relativeFiles(directoryRelativePath, extension, baseRelativePath){

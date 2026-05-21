@@ -21,7 +21,7 @@ npm run verify:play-store-ready
 npm run preflight:play-store:full
 ```
 
-This runs the build, metadata export, local readiness verifier, live privacy URL gate, web transition suite, upload-signing gate, Android device smoke gate, and release evidence export. Before upload signing exists, use the source-side gate:
+This runs the build, metadata export, local readiness verifier, live privacy URL gate, web transition suite, upload-signing gate, upload-signed release APK smoke gate, and release evidence export. Before upload signing exists, use the source-side gate:
 
 ```bash
 npm run preflight:play-store:source
@@ -92,7 +92,7 @@ Do not commit keystores, passwords, local signing properties, or generated bundl
 npm run preflight:play-store:full
 ```
 
-The full preflight includes the physical Android smoke test. To run only that device gate with one authorized USB-debugging device connected:
+The full preflight includes the physical Android smoke test against `android/build/outputs/apk/release/android-release.apk`. To run only the quick debug APK device gate with one authorized USB-debugging device connected:
 
 ```bash
 npm run verify:android-device

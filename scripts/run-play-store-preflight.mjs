@@ -32,6 +32,12 @@ const skipUploadSigning = args.has('--skip-upload-signing');
 const skipLive = args.has('--skip-live');
 const skipWebTransition = args.has('--skip-web-transition');
 const requireAndroidDevice = args.has('--require-android-device');
+const releaseApkPath = 'android/build/outputs/apk/release/android-release.apk';
+
+if(requireAndroidDevice && skipUploadSigning) {
+	console.error('--require-android-device requires upload signing. Use npm run verify:android-device for a debug APK smoke run.');
+	process.exit(2);
+}
 
 const steps = [
 	{
@@ -77,9 +83,14 @@ if(!skipUploadSigning) {
 
 if(requireAndroidDevice) {
 	steps.push({
-		name: 'Verify Android device smoke run',
+		name: 'Build upload-signed release APK for Android smoke run',
+		command: './gradlew',
+		args: [':android:assembleRelease']
+	});
+	steps.push({
+		name: 'Verify Android release APK smoke run',
 		command: 'npm',
-		args: ['run', 'verify:android-device']
+		args: ['run', 'verify:android-device', '--', '--apk', releaseApkPath]
 	});
 }
 
@@ -87,7 +98,10 @@ steps.push({
 	name: 'Export release evidence manifest',
 	command: 'npm',
 	args: ['run', 'export:play-store-evidence'],
-	env: requireAndroidDevice ? { EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE: '1' } : {}
+	env: requireAndroidDevice ? {
+		EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE: '1',
+		EPIC_BALL_EXPECT_ANDROID_DEVICE_APK: releaseApkPath
+	} : {}
 });
 
 console.log('Google Play preflight');
