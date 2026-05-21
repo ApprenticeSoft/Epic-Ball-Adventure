@@ -1,0 +1,11 @@
+Epic Ball Adventure is a compact physics platformer built around one-button control. Roll, jump, bounce, and time each move through handcrafted levels where simple inputs lead to satisfying momentum.
+
+What to expect:
+
+- One-button gameplay that is easy to learn and precise to master.
+- Minimal, colorful visuals built for quick reading on phone screens.
+- Five handcrafted levels with ramps, springs, water, pulleys, and timing challenges.
+- Local progress saving, so players can continue from the latest unlocked level.
+- No ads, no accounts, no analytics, and no personal data collection.
+
+Epic Ball Adventure is designed for short, focused play sessions. Each level asks for careful timing rather than complicated controls, making it approachable while still leaving room for cleaner runs.

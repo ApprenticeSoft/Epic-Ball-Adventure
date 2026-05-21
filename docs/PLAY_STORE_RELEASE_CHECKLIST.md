@@ -9,6 +9,7 @@ Use this checklist before uploading a production build to Google Play.
 
 ```bash
 ./gradlew :html:dist
+npm run export:play-store-metadata
 npm run verify:play-store-ready
 ```
 
@@ -35,6 +36,7 @@ The upload key may also be supplied through ignored local Gradle properties with
 - App category: Game.
 - Data safety: the Android app declares no network or sensitive-data permissions. Local level progress is stored on-device only, and Android cloud backup is disabled in the manifest.
 - Store listing copy: use `docs/PLAY_STORE_LISTING.md` for the app name, short description, full description, release notes, data safety draft, and content rating notes.
+- Fastlane-compatible Play metadata: generated under `fastlane/metadata/android/en-US/`. Regenerate from `docs/PLAY_STORE_LISTING.md` and `docs/play-store-assets/` with `npm run export:play-store-metadata`.
 - Privacy policy: the source policy lives at `docs/PRIVACY_POLICY.md`, the in-game main menu exposes the same policy text, and the web build publishes `html/webapp/privacy.html` as `/privacy.html`. Use `https://ball.marcvidal.ca/privacy.html` in Play Console after redeploying the web build.
 - Store preview assets: generated under `docs/play-store-assets/`.
   - App icon: `docs/play-store-assets/app-icon.png`.
@@ -46,6 +48,7 @@ The upload key may also be supplied through ignored local Gradle properties with
 
 ```bash
 ./gradlew :core:test :desktop:compileJava :html:dist :android:assembleDebug :android:bundleRelease
+npm run export:play-store-metadata
 npm run verify:play-store-ready
 npm run test:web-transition
 ```

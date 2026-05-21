@@ -22,6 +22,7 @@ Run the complete validation set:
 
 ```bash
 ./gradlew :core:test :desktop:compileJava :html:dist :android:assembleDebug
+npm run export:play-store-metadata
 npm run verify:play-store-ready
 npm run test:web-transition
 ```
@@ -32,6 +33,7 @@ For a Google Play release candidate, also build the uploadable app bundle:
 
 ```bash
 ./gradlew :android:bundleRelease
+npm run export:play-store-metadata
 npm run verify:play-store-ready
 ```
 

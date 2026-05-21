@@ -10,6 +10,7 @@ const checks = [];
 try {
 	await checkStoreAssets();
 	await checkListingCopy();
+	await checkFastlaneMetadata();
 	await checkPrivacyPolicy();
 	await checkAndroidConfig();
 }
@@ -140,6 +141,43 @@ async function checkListingCopy(){
 	passIfNoNewFailures(startFailures, 'listing includes privacy and data-safety release statements');
 }
 
+async function checkFastlaneMetadata(){
+	const listing = await readText('docs/PLAY_STORE_LISTING.md');
+	const buildGradle = await readText('android/build.gradle');
+	const versionCode = numberAfter(buildGradle, /versionCode\s*=\s*(\d+)/);
+	const expected = {
+		title: productDetail(listing, 'App name'),
+		shortDescription: firstContentLine(section(listing, 'Short Description')),
+		fullDescription: section(listing, 'Full Description'),
+		releaseNotes: section(listing, 'Release Notes')
+	};
+
+	let startFailures = failureCount();
+	await expectTextFile('fastlane/metadata/android/en-US/title.txt', expected.title);
+	await expectTextFile('fastlane/metadata/android/en-US/short_description.txt', expected.shortDescription);
+	await expectTextFile('fastlane/metadata/android/en-US/full_description.txt', expected.fullDescription);
+	if(versionCode == null)
+		fail('Android versionCode is missing; cannot verify Fastlane changelog');
+	else
+		await expectTextFile(`fastlane/metadata/android/en-US/changelogs/${versionCode}.txt`, expected.releaseNotes);
+	passIfNoNewFailures(startFailures, 'Fastlane text metadata matches listing source');
+
+	startFailures = failureCount();
+	await expectSameFile('docs/play-store-assets/app-icon.png', 'fastlane/metadata/android/en-US/images/icon.png');
+	await expectSameFile('docs/play-store-assets/feature-graphic.png', 'fastlane/metadata/android/en-US/images/featureGraphic.png');
+	const sourceScreenshots = (await readdir(path.join(rootDir, 'docs/play-store-assets/phone-screenshots')))
+		.filter(file => file.endsWith('.png'))
+		.sort();
+	const exportedScreenshots = (await readdir(path.join(rootDir, 'fastlane/metadata/android/en-US/images/phoneScreenshots')))
+		.filter(file => file.endsWith('.png'))
+		.sort();
+	if(sourceScreenshots.join('\n') !== exportedScreenshots.join('\n'))
+		fail('Fastlane phone screenshot filenames do not match docs/play-store-assets');
+	for(const file of sourceScreenshots)
+		await expectSameFile(`docs/play-store-assets/phone-screenshots/${file}`, `fastlane/metadata/android/en-US/images/phoneScreenshots/${file}`);
+	passIfNoNewFailures(startFailures, 'Fastlane image metadata matches generated Play assets');
+}
+
 async function checkPrivacyPolicy(){
 	let startFailures = failureCount();
 	const sourcePolicy = await readText('docs/PRIVACY_POLICY.md');
@@ -225,6 +263,19 @@ async function readText(relativePath){
 	return await readFile(path.join(rootDir, relativePath), 'utf8');
 }
 
+async function expectTextFile(relativePath, expected){
+	const actual = (await readText(relativePath)).trim();
+	if(actual !== expected.trim())
+		fail(`${relativePath} does not match docs/PLAY_STORE_LISTING.md`);
+}
+
+async function expectSameFile(sourceRelativePath, targetRelativePath){
+	const source = await readFile(path.join(rootDir, sourceRelativePath));
+	const target = await readFile(path.join(rootDir, targetRelativePath));
+	if(!source.equals(target))
+		fail(`${targetRelativePath} does not match ${sourceRelativePath}`);
+}
+
 function expectPng(png, expected){
 	if(png.width !== expected.width || png.height !== expected.height)
 		fail(`${png.relativePath} expected ${expected.width}x${expected.height}, got ${png.width}x${png.height}`);
@@ -252,7 +303,22 @@ function section(markdown, heading){
 	return markdown.substring(contentStart, next < 0 ? markdown.length : next).trim();
 }
 
+function productDetail(markdown, label){
+	const match = markdown.match(new RegExp(`^- ${escapeRegExp(label)}: (.+)$`, 'm'));
+	return match ? match[1].trim() : '';
+}
+
+function firstContentLine(text){
+	return text.split('\n')
+		.map(line => line.trim())
+		.find(line => line && !line.startsWith('Character count:')) || '';
+}
+
 function numberAfter(text, pattern){
 	const match = text.match(pattern);
 	return match ? Number(match[1]) : null;
+}
+
+function escapeRegExp(value){
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

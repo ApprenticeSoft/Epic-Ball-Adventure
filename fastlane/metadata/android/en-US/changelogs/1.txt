@@ -1,0 +1,6 @@
+Initial Google Play release.
+
+- Five playable physics levels.
+- One-button touch controls.
+- Local level progress saving.
+- In-game privacy policy.

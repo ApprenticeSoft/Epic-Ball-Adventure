@@ -68,6 +68,8 @@ Generated assets:
 - Phone screenshots: `docs/play-store-assets/phone-screenshots/*.png` - four 1080 x 1920 24-bit PNGs with no alpha.
 - Asset manifest and alt text: `docs/play-store-assets/README.md`.
 - Regeneration command: `npm run generate:play-store-assets`.
+- Fastlane metadata export: `fastlane/metadata/android/en-US/`.
+- Metadata export command: `npm run export:play-store-metadata`.
 
 Remaining before launch:
 
