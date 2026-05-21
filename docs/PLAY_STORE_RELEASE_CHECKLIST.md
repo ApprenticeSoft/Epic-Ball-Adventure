@@ -27,8 +27,9 @@ The upload key may also be supplied through ignored local Gradle properties with
 
 - App category: Game.
 - Data safety: the Android app declares no network or sensitive-data permissions. Local level progress is stored on-device only, and Android cloud backup is disabled in the manifest.
+- Store listing copy: use `docs/PLAY_STORE_LISTING.md` for the app name, short description, full description, release notes, data safety draft, and content rating notes.
 - Privacy policy: the source policy lives at `docs/PRIVACY_POLICY.md`, the in-game main menu exposes the same policy text, and the web build publishes `html/webapp/privacy.html` as `/privacy.html`. Use `https://ball.marcvidal.ca/privacy.html` in Play Console after redeploying the web build.
-- Store assets still needed before launch: feature graphic, phone screenshots, short description, full description, content rating questionnaire, and release notes.
+- Store assets still needed before launch: feature graphic and phone screenshots.
 
 ## Final Checks
 
