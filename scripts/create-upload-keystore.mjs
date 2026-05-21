@@ -7,7 +7,7 @@ const defaultStoreFile = path.join(rootDir, 'android/keystores/upload.jks');
 const defaultPropertiesFile = path.join(rootDir, 'android/signing.properties');
 const storeFile = path.resolve(process.env.EPIC_BALL_UPLOAD_STORE_FILE || defaultStoreFile);
 const propertiesFile = path.resolve(process.env.EPIC_BALL_SIGNING_PROPERTIES_FILE || defaultPropertiesFile);
-const storePassword = requiredSecret('EPIC_BALL_UPLOAD_STORE_PASSWORD');
+const storePassword = await secret('EPIC_BALL_UPLOAD_STORE_PASSWORD', 'Upload keystore password: ');
 const keyPassword = process.env.EPIC_BALL_UPLOAD_KEY_PASSWORD || storePassword;
 const keyAlias = process.env.EPIC_BALL_UPLOAD_KEY_ALIAS || 'epic-ball-upload';
 const overwrite = process.env.EPIC_BALL_OVERWRITE_UPLOAD_KEYSTORE === '1';
@@ -56,11 +56,59 @@ console.log(`Wrote local signing properties to ${path.relative(rootDir, properti
 console.log('Back up the keystore and password outside the repository before uploading a release.');
 console.log('Next: ./gradlew :android:verifyPlayStoreRelease');
 
-function requiredSecret(name){
+async function secret(name, prompt){
 	const value = process.env[name];
 	if(!value || !value.trim())
-		throw new Error(`${name} is required. Set it in the environment so it is not stored in shell history.`);
+		return await promptHidden(prompt, name);
 	return value;
+}
+
+async function promptHidden(prompt, name){
+	if(!process.stdin.isTTY || !process.stdout.isTTY)
+		throw new Error(`${name} is required when no interactive terminal is available.`);
+
+	return await new Promise((resolve, reject) => {
+		let value = '';
+		const stdin = process.stdin;
+		const stdout = process.stdout;
+		const wasRaw = stdin.isRaw;
+
+		function cleanup(){
+			stdin.off('data', onData);
+			if(stdin.setRawMode)
+				stdin.setRawMode(Boolean(wasRaw));
+			stdin.pause();
+		}
+
+		function onData(chunk){
+			for(const character of chunk) {
+				if(character === '\u0003') {
+					cleanup();
+					stdout.write('\n');
+					reject(new Error('Upload keystore creation cancelled.'));
+					return;
+				}
+				if(character === '\r' || character === '\n') {
+					cleanup();
+					stdout.write('\n');
+					resolve(value);
+					return;
+				}
+				if(character === '\u0008' || character === '\u007f') {
+					value = value.slice(0, -1);
+					continue;
+				}
+				value += character;
+			}
+		}
+
+		stdout.write(prompt);
+		stdin.setEncoding('utf8');
+		if(stdin.setRawMode)
+			stdin.setRawMode(true);
+		stdin.resume();
+		stdin.on('data', onData);
+	});
 }
 
 function javaPropertiesValue(value){

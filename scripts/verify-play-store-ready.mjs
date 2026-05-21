@@ -303,7 +303,9 @@ async function checkAndroidConfig(){
 		'keytool',
 		'android/keystores/upload.jks',
 		'android/signing.properties',
-		'EPIC_BALL_UPLOAD_STORE_PASSWORD'
+		'EPIC_BALL_UPLOAD_STORE_PASSWORD',
+		'promptHidden',
+		'setRawMode'
 	]);
 	passIfNoNewFailures(startFailures, 'upload signing helper and ignored local signing config are present');
 }
