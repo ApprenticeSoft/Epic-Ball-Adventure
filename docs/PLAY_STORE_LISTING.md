@@ -9,6 +9,9 @@ Use this as the source copy for the first internal testing or production listing
 - Default language: English (United States)
 - App type: Game
 - Category: Arcade
+- Ads: No
+- Target audience: Ages 13-15, 16-17, and 18+
+- App access: All gameplay is available without sign-in, purchase, account creation, or special instructions.
 - Website: https://ball.marcvidal.ca
 - Privacy policy: https://ball.marcvidal.ca/privacy.html
 
@@ -43,12 +46,25 @@ Initial Google Play release.
 
 ## Data Safety Draft
 
+- Privacy policy: https://ball.marcvidal.ca/privacy.html
 - Data collected: No user data collected.
 - Data shared: No user data shared.
 - Data processed ephemerally: No.
 - Security practices: No data is transmitted by the app.
 - Account creation: Not supported.
 - User data deletion request: Not applicable because the app has no accounts and collects no user data. Local progress can be removed by clearing app data or uninstalling the app.
+
+## Target Audience And Content Draft
+
+- Target age groups: 13-15, 16-17, 18+.
+- Designed for children under 13: No.
+- App access restrictions: None.
+- Ads: No ads.
+- In-app purchases: None.
+- User interaction: None.
+- User-generated content: None.
+- Personal information collection from children: None.
+- Store presence note: The listing describes a compact physics platformer for short, focused play sessions and does not claim to be made for children.
 
 ## Content Rating Notes
 

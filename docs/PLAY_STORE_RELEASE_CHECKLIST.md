@@ -50,6 +50,7 @@ Do not commit keystores, passwords, local signing properties, or generated bundl
 - App category: Game.
 - Package name: `com.apprenticesoft.epicballadventure`.
 - Data safety: the Android app declares no network or sensitive-data permissions. The merged release manifest may include the package-scoped AndroidX ProfileInstaller signature permission only. Local level progress is stored on-device only, and Android cloud backup is disabled in the manifest.
+- App content forms: use `docs/PLAY_CONSOLE_APP_CONTENT.md` for Data safety, App access, Ads, Target audience and content, and Content rating draft answers.
 - Store listing copy: use `docs/PLAY_STORE_LISTING.md` for the app name, short description, full description, release notes, data safety draft, and content rating notes.
 - Fastlane-compatible Play metadata: generated under `fastlane/metadata/android/en-US/`. Regenerate from `docs/PLAY_STORE_LISTING.md` and `docs/play-store-assets/` with `npm run export:play-store-metadata`.
 - Privacy policy: the source policy lives at `docs/PRIVACY_POLICY.md`, the in-game main menu exposes the same policy text, and the web build publishes `html/webapp/privacy.html` as `/privacy.html`. Use `https://ball.marcvidal.ca/privacy.html` in Play Console after redeploying the web build.

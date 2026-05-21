@@ -156,11 +156,13 @@ async function checkListingCopy(){
 	else
 		pass(`listing full description is ${fullDescription.length}/4000 chars`);
 
-	const startFailures = failureCount();
+	let startFailures = failureCount();
 	for(const required of [
 		'No ads, no accounts, no analytics, and no personal data collection.',
 		'Data collected: No user data collected.',
 		'Data shared: No user data shared.',
+		'Target audience: Ages 13-15, 16-17, and 18+',
+		'App access: All gameplay is available without sign-in, purchase, account creation, or special instructions.',
 		`Package name: ${expectedApplicationId}`,
 		'Privacy policy: https://ball.marcvidal.ca/privacy.html'
 	]) {
@@ -168,6 +170,29 @@ async function checkListingCopy(){
 			fail(`listing is missing required release statement: ${required}`);
 	}
 	passIfNoNewFailures(startFailures, 'listing includes privacy and data-safety release statements');
+
+	startFailures = failureCount();
+	const appContent = await readText('docs/PLAY_CONSOLE_APP_CONTENT.md');
+	for(const required of [
+		'## Privacy Policy',
+		'## App Access',
+		'## Ads',
+		'## Data Safety',
+		'## Target Audience And Content',
+		'## Content Rating Draft',
+		'URL: https://ball.marcvidal.ca/privacy.html',
+		'Restricted access: No.',
+		'Contains ads: No.',
+		'Data collected: No user data collected.',
+		'Target age groups: 13-15, 16-17, 18+.',
+		'Designed primarily for children under 13: No.',
+		'Violence: None.',
+		'User-generated content: None.'
+	]) {
+		if(!appContent.includes(required))
+			fail(`Play Console app content draft is missing: ${required}`);
+	}
+	passIfNoNewFailures(startFailures, 'Play Console app content draft covers required submission forms');
 }
 
 async function checkFastlaneMetadata(){
