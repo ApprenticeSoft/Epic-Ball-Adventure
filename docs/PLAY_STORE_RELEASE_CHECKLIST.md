@@ -5,18 +5,18 @@ Use this checklist before uploading a production build to Google Play.
 ## Build Gate
 
 - Keep `targetSdk` at or above the current Google Play submission floor. The Android module currently targets SDK 36.
-- Build the web artifact and verify Play Store metadata, privacy pages, Android release config, and generated store assets:
+- Build the web and Android release artifacts, then verify Play Store metadata, privacy pages, Android release config, generated store assets, and the uploadable bundle:
 
 ```bash
-./gradlew :html:dist
+./gradlew :html:dist :android:bundleRelease
 npm run export:play-store-metadata
 npm run verify:play-store-ready
 ```
 
-- Build the Android App Bundle:
+- The uploadable Android App Bundle is written to:
 
 ```bash
-./gradlew :android:bundleRelease
+android/build/outputs/bundle/release/android-release.aab
 ```
 
 - For a real upload candidate, configure the upload signing key outside the repo and run:

@@ -21,7 +21,7 @@ git ls-remote origin refs/heads/master refs/heads/modernize-libgdx-html-ball
 Run the complete validation set:
 
 ```bash
-./gradlew :core:test :desktop:compileJava :html:dist :android:assembleDebug
+./gradlew :core:test :desktop:compileJava :html:dist :android:assembleDebug :android:bundleRelease
 npm run export:play-store-metadata
 npm run verify:play-store-ready
 npm run test:web-transition

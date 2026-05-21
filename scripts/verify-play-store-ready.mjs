@@ -1,5 +1,6 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { PNG } from 'pngjs';
 
@@ -13,6 +14,7 @@ try {
 	await checkFastlaneMetadata();
 	await checkPrivacyPolicy();
 	await checkAndroidConfig();
+	await checkAndroidBundleArtifact();
 }
 catch(error) {
 	fail(error.message || String(error));
@@ -246,6 +248,50 @@ async function checkAndroidConfig(){
 	passIfNoNewFailures(startFailures, 'Android release build metadata is present');
 }
 
+async function checkAndroidBundleArtifact(){
+	const bundlePath = 'android/build/outputs/bundle/release/android-release.aab';
+	const absoluteBundlePath = path.join(rootDir, bundlePath);
+	if(!existsSync(absoluteBundlePath)) {
+		fail(`${bundlePath} is missing; run ./gradlew :android:bundleRelease before final Play verification`);
+		return;
+	}
+
+	let startFailures = failureCount();
+	const bundleStat = await stat(absoluteBundlePath);
+	if(bundleStat.size <= 0)
+		fail(`${bundlePath} is empty`);
+	if(bundleStat.size > 200 * 1024 * 1024)
+		fail(`${bundlePath} is larger than the 200MB base-module size gate`);
+	passIfNoNewFailures(startFailures, `release AAB exists at ${formatMiB(bundleStat.size)} MiB`);
+
+	startFailures = failureCount();
+	const entries = zipEntries(absoluteBundlePath);
+	for(const required of [
+		'BundleConfig.pb',
+		'base/manifest/AndroidManifest.xml',
+		'base/dex/classes.dex',
+		'base/assets/Levels/Level 1.tmx',
+		'base/assets/Levels/Level 5.tmx',
+		'base/assets/Images/Images.pack',
+		'base/assets/Images/ImagesWaterBubbles.png',
+		'base/res/drawable-xxxhdpi-v4/ic_launcher.png'
+	]) {
+		if(!entries.includes(required))
+			fail(`release AAB is missing ${required}`);
+	}
+	passIfNoNewFailures(startFailures, 'release AAB contains manifest, code, launcher icon, and gameplay assets');
+
+	startFailures = failureCount();
+	for(const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
+		for(const library of ['libgdx.so', 'libgdx-box2d.so', 'libgdx-freetype.so']) {
+			const entry = `base/lib/${abi}/${library}`;
+			if(!entries.includes(entry))
+				fail(`release AAB is missing ${entry}`);
+		}
+	}
+	passIfNoNewFailures(startFailures, 'release AAB packages LibGDX native libraries for arm64-v8a, armeabi-v7a, and x86_64');
+}
+
 async function readPng(relativePath){
 	const buffer = await readFile(path.join(rootDir, relativePath));
 	const png = PNG.sync.read(buffer);
@@ -317,6 +363,20 @@ function firstContentLine(text){
 function numberAfter(text, pattern){
 	const match = text.match(pattern);
 	return match ? Number(match[1]) : null;
+}
+
+function zipEntries(filePath){
+	const result = spawnSync('unzip', ['-Z1', filePath], {
+		encoding: 'utf8',
+		maxBuffer: 1024 * 1024 * 8
+	});
+	if(result.status !== 0)
+		throw new Error(`Could not inspect ${path.relative(rootDir, filePath)} with unzip: ${result.stderr || result.stdout}`);
+	return result.stdout.split('\n').map(line => line.trim()).filter(Boolean);
+}
+
+function formatMiB(bytes){
+	return (bytes / (1024 * 1024)).toFixed(1);
 }
 
 function escapeRegExp(value){
