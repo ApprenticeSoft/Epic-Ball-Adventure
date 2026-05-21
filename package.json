@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate:play-store-assets": "node scripts/generate-play-store-assets.mjs",
     "test:web-transition": "playwright test"
   },
   "devDependencies": {

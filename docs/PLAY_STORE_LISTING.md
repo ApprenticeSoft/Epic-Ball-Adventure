@@ -61,15 +61,21 @@ Initial Google Play release.
 
 ## Preview Asset Plan
 
-Required before launch:
+Generated assets:
+
+- Feature graphic: `docs/play-store-assets/feature-graphic.png` - 1024 x 500 24-bit PNG with no alpha.
+- Phone screenshots: `docs/play-store-assets/phone-screenshots/*.png` - four 1080 x 1920 24-bit PNGs with no alpha.
+- Asset manifest and alt text: `docs/play-store-assets/README.md`.
+- Regeneration command: `npm run generate:play-store-assets`.
+
+Remaining before launch:
 
 - App icon: existing Android launcher icon, verify against current Google Play icon rules.
-- Feature graphic: create a 1024 x 500 24-bit PNG with no alpha.
-- Phone screenshots: capture at least two gameplay screenshots from the Android build or a matching mobile viewport.
+- Upload the generated feature graphic and phone screenshots into Play Console.
 
-Recommended screenshots:
+Screenshot coverage:
 
-- Main menu with the minimal title/start state.
 - Level 1 early gameplay with the ball, ramps, and goal visible.
+- Level 2 timing/ramp gameplay.
 - A water-level shot showing bubbles/foam.
-- A pulley or spring challenge showing the physics variety.
+- A later pulley/physics challenge.
