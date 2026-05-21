@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
 const args = new Set(process.argv.slice(2));
-const knownArgs = new Set(['--help', '-h', '--skip-upload-signing', '--skip-live', '--skip-web-transition']);
+const knownArgs = new Set(['--help', '-h', '--skip-upload-signing', '--skip-live', '--skip-web-transition', '--require-android-device']);
 
 if(args.has('--help') || args.has('-h')) {
 	console.log(`Usage: npm run preflight:play-store -- [options]
@@ -14,6 +14,8 @@ Options:
   --skip-upload-signing   Run source-side checks without requiring upload signing.
   --skip-live             Skip the live https://ball.marcvidal.ca privacy URL gate.
   --skip-web-transition   Skip the Playwright web transition suite.
+  --require-android-device
+                          Install and launch the game on one connected Android device.
 `);
 	process.exit(0);
 }
@@ -29,6 +31,7 @@ for(const arg of args) {
 const skipUploadSigning = args.has('--skip-upload-signing');
 const skipLive = args.has('--skip-live');
 const skipWebTransition = args.has('--skip-web-transition');
+const requireAndroidDevice = args.has('--require-android-device');
 
 const steps = [
 	{
@@ -72,6 +75,14 @@ if(!skipUploadSigning) {
 	});
 }
 
+if(requireAndroidDevice) {
+	steps.push({
+		name: 'Verify Android device smoke run',
+		command: 'npm',
+		args: ['run', 'verify:android-device']
+	});
+}
+
 steps.push({
 	name: 'Export release evidence manifest',
 	command: 'npm',
@@ -86,6 +97,8 @@ if(skipLive)
 	console.log('Live privacy URL gate is skipped.');
 if(skipWebTransition)
 	console.log('Web transition suite is skipped.');
+if(requireAndroidDevice)
+	console.log('Android device smoke gate is required.');
 
 const startedAt = Date.now();
 let failedStep = null;
@@ -123,7 +136,9 @@ if(failedStep) {
 
 console.log('PASS automated Play Store preflight gates completed.');
 console.log('Release evidence: build/play-store-release-evidence.json');
-console.log('Manual before production promotion: upload the AAB in Play Console, complete App content forms from docs/PLAY_CONSOLE_APP_CONTENT.md, and install the release on a physical Android device.');
+console.log(requireAndroidDevice
+	? 'Manual before production promotion: upload the AAB in Play Console and complete App content forms from docs/PLAY_CONSOLE_APP_CONTENT.md.'
+	: 'Manual before production promotion: upload the AAB in Play Console, complete App content forms from docs/PLAY_CONSOLE_APP_CONTENT.md, and install the release on a physical Android device.');
 
 function formatCommand(command, commandArgs){
 	return [command, ...commandArgs.map(shellQuote)].join(' ');

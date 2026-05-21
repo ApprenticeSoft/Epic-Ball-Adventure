@@ -319,6 +319,8 @@ async function checkAndroidConfig(){
 		fail('package.json is missing export:play-store-evidence script');
 	if(packageJson.scripts?.['preflight:play-store'] !== 'node scripts/run-play-store-preflight.mjs')
 		fail('package.json is missing preflight:play-store script');
+	if(packageJson.scripts?.['preflight:play-store:full'] !== 'node scripts/run-play-store-preflight.mjs --require-android-device')
+		fail('package.json is missing preflight:play-store:full script');
 	if(packageJson.scripts?.['preflight:play-store:source'] !== 'node scripts/run-play-store-preflight.mjs --skip-upload-signing')
 		fail('package.json is missing preflight:play-store:source script');
 	if(packageJson.scripts?.['verify:android-device'] !== 'node scripts/verify-android-device.mjs')
@@ -341,7 +343,9 @@ async function checkAndroidConfig(){
 		'setRawMode'
 	]);
 	await expectTextIncludes('scripts/run-play-store-preflight.mjs', [
+		'--require-android-device',
 		'export:play-store-evidence',
+		'verify:android-device',
 		'verify:play-store-live',
 		'test:web-transition',
 		':android:verifyPlayStoreRelease'

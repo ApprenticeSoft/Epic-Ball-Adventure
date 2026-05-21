@@ -18,13 +18,19 @@ npm run verify:play-store-ready
 - The full local release-candidate preflight is:
 
 ```bash
-npm run preflight:play-store
+npm run preflight:play-store:full
 ```
 
-This runs the build, metadata export, local readiness verifier, live privacy URL gate, web transition suite, and upload-signing gate. Before upload signing exists, use the source-side gate:
+This runs the build, metadata export, local readiness verifier, live privacy URL gate, web transition suite, upload-signing gate, Android device smoke gate, and release evidence export. Before upload signing exists, use the source-side gate:
 
 ```bash
 npm run preflight:play-store:source
+```
+
+When upload signing is configured but no Android device is attached, use:
+
+```bash
+npm run preflight:play-store
 ```
 
 - Each successful preflight writes an ignored release evidence manifest with artifact sizes, SHA-256 hashes, version metadata, git state, Play metadata paths, and policy file hashes:
@@ -83,10 +89,10 @@ Do not commit keystores, passwords, local signing properties, or generated bundl
 ## Final Checks
 
 ```bash
-npm run preflight:play-store
+npm run preflight:play-store:full
 ```
 
-Install the generated build on at least one physical Android device before promoting it from internal testing. With one authorized USB-debugging device connected, run:
+The full preflight includes the physical Android smoke test. To run only that device gate with one authorized USB-debugging device connected:
 
 ```bash
 npm run verify:android-device
