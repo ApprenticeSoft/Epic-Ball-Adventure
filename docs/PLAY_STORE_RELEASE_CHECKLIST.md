@@ -27,7 +27,7 @@ The upload key may also be supplied through ignored local Gradle properties with
 
 - App category: Game.
 - Data safety: the Android app declares no network or sensitive-data permissions. Local level progress is stored on-device only, and Android cloud backup is disabled in the manifest.
-- Privacy policy: publish a short policy that states the app does not collect, transmit, or share personal data.
+- Privacy policy: the source policy lives at `docs/PRIVACY_POLICY.md`, the in-game main menu exposes the same policy text, and the web build publishes `html/webapp/privacy.html` as `/privacy.html`. Use `https://ball.marcvidal.ca/privacy.html` in Play Console after redeploying the web build.
 - Store assets still needed before launch: feature graphic, phone screenshots, short description, full description, content rating questionnaire, and release notes.
 
 ## Final Checks
@@ -43,4 +43,6 @@ Install the generated release build on at least one physical Android device befo
 
 - Google Play target API policy: https://support.google.com/googleplay/android-developer/answer/16561298
 - Android App Bundle format: https://developer.android.com/guide/app-bundle/app-bundle-format
+- Google Play user data and privacy policy requirements: https://support.google.com/googleplay/android-developer/answer/10144311
 - Google Play Data safety form: https://support.google.com/googleplay/android-developer/answer/10787469
+- Google Play preview asset requirements: https://support.google.com/googleplay/android-developer/answer/1078870

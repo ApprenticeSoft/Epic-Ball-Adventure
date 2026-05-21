@@ -12,7 +12,7 @@ git branch -vv
 git ls-remote origin refs/heads/master refs/heads/modernize-libgdx-html-ball
 ```
 
-- The current modernization branch is `modernize-libgdx-html-ball`.
+- The release branch is `master`.
 - The public production URL is `https://ball.marcvidal.ca`.
 - Do not store GitHub tokens, SSH passwords, sudo passwords, or deployment secrets in the repository.
 
@@ -64,15 +64,12 @@ Verify the served bundle:
 
 ```bash
 curl -fsSLI https://ball.marcvidal.ca/ | sed -n '1,12p'
+curl -fsSLI https://ball.marcvidal.ca/privacy.html | sed -n '1,12p'
 curl -fsSL https://ball.marcvidal.ca/html/html.nocache.js | rg -o "[0-9A-F]{32}" | head
 ```
 
 Expected result:
 
-- HTTP status is `200 OK`.
+- HTTP status is `200 OK` for both `/` and `/privacy.html`.
 - `Last-Modified` reflects the deployed build.
 - The bundle references at least one GWT cache file hash.
-
-## Merge Recommendation
-
-After validation and live smoke checks pass, merge `modernize-libgdx-html-ball` into `master` with a normal merge commit so the modernization history remains visible.

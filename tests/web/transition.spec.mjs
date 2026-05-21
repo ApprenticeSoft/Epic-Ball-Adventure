@@ -9,6 +9,32 @@ test('web entrypoint uses the current bundle cache token', async ({ page }) => {
   expect(scriptSource).toContain('20260520-forced-atlas-refresh');
 });
 
+test('privacy policy page is available for Play Console listing', async ({ page }) => {
+  await page.goto('/privacy.html');
+
+  await expect(page).toHaveTitle('Epic Ball Adventure Privacy Policy');
+  await expect(page.getByRole('heading', { name: 'Epic Ball Adventure Privacy Policy' })).toBeVisible();
+  await expect(page.getByText('does not collect, transmit, sell, or share personal data')).toBeVisible();
+  await expect(page.getByText('Privacy contact:')).toBeVisible();
+});
+
+test('main menu privacy overlay opens without starting the game', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Desktop keyboard coverage is enough for the menu overlay.');
+  const logs = [];
+  page.on('console', message => logs.push(message.text()));
+
+  await page.goto('/?ballDebug=1');
+  await waitForDebugEvent(page, logs, 'main menu layout', 10000);
+  await page.keyboard.press('P');
+
+  await expect.poll(async () => await screenshotHasPrivacyPanel(page), {
+    timeout: 5000,
+    message: 'Expected the in-game privacy policy panel to become visible.'
+  }).toBe(true);
+
+  expect((await getDebugEvents(page)).join('\n')).not.toContain('GameScreen construct begin');
+});
+
 test('debug water bubble probe spawns visible-frame bubbles', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes('mobile'), 'Desktop capture is enough for the water probe.');
   const logs = [];
@@ -684,8 +710,8 @@ function assertHorizontallyCentered(screen, bounds, tolerance) {
 }
 
 async function screenshotHasNonBlackPixels(page) {
-  const png = PNG.sync.read(await page.screenshot());
-  const stride = Math.max(1, Math.floor(Math.sqrt((png.width * png.height) / 20000)));
+	const png = PNG.sync.read(await page.screenshot());
+	const stride = Math.max(1, Math.floor(Math.sqrt((png.width * png.height) / 20000)));
   let visiblePixels = 0;
   let samples = 0;
 
@@ -701,11 +727,35 @@ async function screenshotHasNonBlackPixels(page) {
     }
   }
 
-  return visiblePixels > Math.max(50, samples * 0.02);
+	return visiblePixels > Math.max(50, samples * 0.02);
+}
+
+async function screenshotHasPrivacyPanel(page) {
+  const png = PNG.sync.read(await page.screenshot());
+  const stride = Math.max(1, Math.floor(Math.sqrt((png.width * png.height) / 20000)));
+  const minX = Math.floor(png.width * 0.16);
+  const maxX = Math.floor(png.width * 0.84);
+  const minY = Math.floor(png.height * 0.16);
+  const maxY = Math.floor(png.height * 0.84);
+  let panelPixels = 0;
+  let samples = 0;
+
+  for(let y = minY; y < maxY; y += stride){
+    for(let x = minX; x < maxX; x += stride){
+      const index = (png.width * y + x) << 2;
+      if(png.data[index + 3] === 0)
+        continue;
+      samples++;
+      if(png.data[index] > 245 && png.data[index + 1] > 220 && png.data[index + 2] > 215)
+        panelPixels++;
+    }
+  }
+
+  return panelPixels > samples * 0.35;
 }
 
 function visibleBubbleRingStats(screenshot) {
-  const png = PNG.sync.read(screenshot);
+	const png = PNG.sync.read(screenshot);
   const minX = Math.floor(png.width * 0.14);
   const maxX = Math.floor(png.width * 0.92);
   const minY = Math.floor(png.height * 0.76);
