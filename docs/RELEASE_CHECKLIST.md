@@ -70,10 +70,12 @@ Verify the served bundle:
 curl -fsSLI https://ball.marcvidal.ca/ | sed -n '1,12p'
 curl -fsSLI https://ball.marcvidal.ca/privacy.html | sed -n '1,12p'
 curl -fsSL https://ball.marcvidal.ca/html/html.nocache.js | rg -o "[0-9A-F]{32}" | head
+npm run verify:play-store-live
 ```
 
 Expected result:
 
 - HTTP status is `200 OK` for both `/` and `/privacy.html`.
+- `npm run verify:play-store-live` passes before the privacy URL is used in Play Console.
 - `Last-Modified` reflects the deployed build.
 - The bundle references at least one GWT cache file hash.
