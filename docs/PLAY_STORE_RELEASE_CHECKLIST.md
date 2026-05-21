@@ -33,7 +33,7 @@ When upload signing is configured but no Android device is attached, use:
 npm run preflight:play-store
 ```
 
-- Each successful preflight writes an ignored release evidence manifest with artifact sizes, SHA-256 hashes, version metadata, git state, Play metadata paths, and policy file hashes:
+- Each successful preflight writes an ignored release evidence manifest with artifact sizes, SHA-256 hashes, version metadata, git state, upload-signing certificate fingerprint when configured, Play metadata paths, and policy file hashes:
 
 ```bash
 build/play-store-release-evidence.json

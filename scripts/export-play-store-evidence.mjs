@@ -6,6 +6,7 @@ import path from 'node:path';
 const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
 const outputPath = path.join(rootDir, 'build/play-store-release-evidence.json');
 const buildGradle = await readText('android/build.gradle');
+const requireUploadSigningEvidence = process.env.EPIC_BALL_REQUIRE_UPLOAD_SIGNING_EVIDENCE === '1';
 const requireAndroidDeviceEvidence = process.env.EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE === '1';
 const expectedAndroidDeviceApk = normalizeRelativePath(process.env.EPIC_BALL_EXPECT_ANDROID_DEVICE_APK || '');
 
@@ -25,6 +26,7 @@ const evidence = {
 		targetSdk: numberAfter(buildGradle, /targetSdk\s*=\s*(\d+)/)
 	},
 	artifacts: {},
+	uploadSigning: {},
 	androidDeviceSmoke: {},
 	playMetadata: {},
 	policy: {},
@@ -49,6 +51,7 @@ for(const required of [
 evidence.artifacts.releaseBundle = await fileEvidence('android/build/outputs/bundle/release/android-release.aab');
 evidence.artifacts.debugApk = await fileEvidence('android/build/outputs/apk/debug/android-debug.apk');
 evidence.artifacts.releaseApk = await optionalFileEvidence('android/build/outputs/apk/release/android-release.apk');
+evidence.uploadSigning = await uploadSigningEvidence(requireUploadSigningEvidence);
 evidence.androidDeviceSmoke = await androidDeviceSmokeEvidence([
 	evidence.artifacts.debugApk,
 	evidence.artifacts.releaseApk
@@ -121,6 +124,95 @@ async function groupEvidence(baseRelativePath, fileRelativePaths){
 	return {
 		basePath: baseRelativePath,
 		files
+	};
+}
+
+async function uploadSigningEvidence(required){
+	const propertiesPath = 'android/signing.properties';
+	const propertiesText = await readText(propertiesPath).catch(error => {
+		if(error.code === 'ENOENT')
+			return null;
+		throw error;
+	});
+	if(propertiesText == null) {
+		if(required)
+			throw new Error(`${propertiesPath} is missing; run npm run create:upload-keystore before exporting signed release evidence`);
+		return {
+			status: 'not-configured',
+			propertiesPath
+		};
+	}
+
+	const properties = parseJavaProperties(propertiesText);
+	const missing = [
+		'EPIC_BALL_UPLOAD_STORE_FILE',
+		'EPIC_BALL_UPLOAD_STORE_PASSWORD',
+		'EPIC_BALL_UPLOAD_KEY_ALIAS',
+		'EPIC_BALL_UPLOAD_KEY_PASSWORD'
+	].filter(name => !properties[name]);
+	const storePath = normalizeRelativePath(properties.EPIC_BALL_UPLOAD_STORE_FILE || '');
+	const result = {
+		status: 'configured',
+		propertiesPath,
+		storeFile: storePath,
+		keyAlias: properties.EPIC_BALL_UPLOAD_KEY_ALIAS || ''
+	};
+	if(missing.length > 0) {
+		result.status = 'incomplete';
+		result.missing = missing;
+		if(required)
+			throw new Error(`${propertiesPath} is missing required upload signing values: ${missing.join(', ')}`);
+		return result;
+	}
+
+	const storeStat = await stat(path.join(rootDir, storePath)).catch(error => {
+		if(error.code === 'ENOENT')
+			return null;
+		throw error;
+	});
+	if(storeStat == null) {
+		result.status = 'missing-keystore';
+		if(required)
+			throw new Error(`upload keystore does not exist: ${storePath}`);
+		return result;
+	}
+
+	result.certificate = uploadCertificateEvidence(properties);
+	if(required && result.status !== 'configured')
+		throw new Error(`upload signing evidence is ${result.status}`);
+	return result;
+}
+
+function uploadCertificateEvidence(properties){
+	const result = spawnSync('keytool', [
+		'-list',
+		'-v',
+		'-keystore', properties.EPIC_BALL_UPLOAD_STORE_FILE,
+		'-storepass:env', 'EPIC_BALL_UPLOAD_STORE_PASSWORD',
+		'-alias', properties.EPIC_BALL_UPLOAD_KEY_ALIAS
+	], {
+		cwd: rootDir,
+		encoding: 'utf8',
+		env: {
+			...process.env,
+			EPIC_BALL_UPLOAD_STORE_PASSWORD: properties.EPIC_BALL_UPLOAD_STORE_PASSWORD
+		},
+		maxBuffer: 1024 * 1024
+	});
+	if(result.error)
+		throw new Error(`keytool failed: ${result.error.message}`);
+	if(result.status !== 0)
+		throw new Error(`keytool failed while reading upload certificate: ${result.stderr || result.stdout}`);
+
+	const output = result.stdout;
+	return {
+		owner: textAfter(output, /^Owner:\s*(.+)$/m),
+		issuer: textAfter(output, /^Issuer:\s*(.+)$/m),
+		serialNumber: textAfter(output, /^Serial number:\s*(.+)$/m),
+		validity: textAfter(output, /^Valid from:\s*(.+)$/m),
+		sha1: textAfter(output, /^\s*SHA1:\s*([0-9A-F:]+)$/m),
+		sha256: textAfter(output, /^\s*SHA256:\s*([0-9A-F:]+)$/m),
+		signatureAlgorithm: textAfter(output, /^Signature algorithm name:\s*(.+)$/m)
 	};
 }
 
@@ -211,6 +303,31 @@ function normalizeRelativePath(value){
 		? path.relative(rootDir, value)
 		: path.normalize(value);
 	return normalized.replaceAll(path.sep, '/').replace(/^\.\//, '');
+}
+
+function parseJavaProperties(text){
+	const properties = {};
+	for(const rawLine of text.split(/\r?\n/)) {
+		const line = rawLine.trim();
+		if(!line || line.startsWith('#') || line.startsWith('!'))
+			continue;
+		const separator = line.search(/(?<!\\)[=:]/);
+		const key = separator === -1 ? line : line.slice(0, separator);
+		const value = separator === -1 ? '' : line.slice(separator + 1);
+		properties[unescapeJavaProperty(key.trim())] = unescapeJavaProperty(value.trim());
+	}
+	return properties;
+}
+
+function unescapeJavaProperty(value){
+	return value.replace(/\\([\\nrt:=#!])/g, (_, character) => {
+		switch(character) {
+		case 'n': return '\n';
+		case 'r': return '\r';
+		case 't': return '\t';
+		default: return character;
+		}
+	});
 }
 
 async function relativeFiles(directoryRelativePath, extension, baseRelativePath){

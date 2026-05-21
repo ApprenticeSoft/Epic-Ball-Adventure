@@ -37,7 +37,7 @@ npm run preflight:play-store
 npm run preflight:play-store:full
 ```
 
-Use `preflight:play-store:source` before upload signing exists, `preflight:play-store` after upload signing is configured but no Android device is attached, and `preflight:play-store:full` for the final local release-candidate gate with upload signing and a physical Android smoke run of `android/build/outputs/apk/release/android-release.apk`. Each successful preflight writes `build/play-store-release-evidence.json`; the full mode also requires fresh `build/android-device-smoke-evidence.json` from the current release APK.
+Use `preflight:play-store:source` before upload signing exists, `preflight:play-store` after upload signing is configured but no Android device is attached, and `preflight:play-store:full` for the final local release-candidate gate with upload signing and a physical Android smoke run of `android/build/outputs/apk/release/android-release.apk`. Each successful preflight writes `build/play-store-release-evidence.json`; signed modes require upload-signing certificate evidence, and the full mode also requires fresh `build/android-device-smoke-evidence.json` from the current release APK.
 
 For first-time Play upload signing setup, create an ignored local keystore config and back up the generated keystore and password outside the repository:
 

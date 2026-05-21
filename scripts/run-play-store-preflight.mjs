@@ -94,14 +94,19 @@ if(requireAndroidDevice) {
 	});
 }
 
+const evidenceEnv = {};
+if(!skipUploadSigning)
+	evidenceEnv.EPIC_BALL_REQUIRE_UPLOAD_SIGNING_EVIDENCE = '1';
+if(requireAndroidDevice) {
+	evidenceEnv.EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE = '1';
+	evidenceEnv.EPIC_BALL_EXPECT_ANDROID_DEVICE_APK = releaseApkPath;
+}
+
 steps.push({
 	name: 'Export release evidence manifest',
 	command: 'npm',
 	args: ['run', 'export:play-store-evidence'],
-	env: requireAndroidDevice ? {
-		EPIC_BALL_REQUIRE_ANDROID_DEVICE_EVIDENCE: '1',
-		EPIC_BALL_EXPECT_ANDROID_DEVICE_APK: releaseApkPath
-	} : {}
+	env: evidenceEnv
 });
 
 console.log('Google Play preflight');
