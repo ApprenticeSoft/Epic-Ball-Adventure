@@ -11,8 +11,12 @@
     "preflight:play-store": "node scripts/run-play-store-preflight.mjs",
     "preflight:play-store:full": "node scripts/run-play-store-preflight.mjs --require-android-device",
     "preflight:play-store:source": "node scripts/run-play-store-preflight.mjs --skip-upload-signing",
+    "benchmark:web": "node scripts/web-production-check.mjs --mode benchmark",
+    "screenshot:web": "node scripts/web-production-check.mjs --mode screenshot",
     "test:web-transition": "playwright test",
+    "test:web-transition:live": "WEB_BASE_URL=https://ball.marcvidal.ca playwright test --project=desktop",
     "verify:android-device": "node scripts/verify-android-device.mjs",
+    "verify:web-live": "node scripts/web-production-check.mjs --mode smoke --url https://ball.marcvidal.ca",
     "verify:play-store-live": "node scripts/verify-play-store-live.mjs",
     "verify:play-store-ready": "node scripts/verify-play-store-ready.mjs"
   },

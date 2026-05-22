@@ -7,10 +7,14 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.World;
 import com.badlogic.gdx.physics.box2d.BodyDef.BodyType;
 import com.one.button.jam.Couleurs;
+import utils.SpringLightGeometry;
+import utils.SpringMotion;
 
 public class Spring extends Obstacle{
 
 	private Vector2 limitPosition;
+	private final Vector2 activeVelocity = new Vector2();
+	private final Vector2 localDisplacement = new Vector2();
 	private float powerX = 0, powerY = 0;
 
 	public Spring(World world, Camera camera, MapObject rectangleObject, Couleurs couleurs) {
@@ -51,15 +55,32 @@ public class Spring extends Obstacle{
 
 	@Override
 	public void actif(){
-		body.setLinearVelocity(powerX, powerY);
+		body.setLinearVelocity(SpringMotion.worldVelocity(powerX, powerY, body.getAngle(), activeVelocity));
+	}
+
+	public float getPowerX(){
+		return powerX;
+	}
+
+	public float getPowerY(){
+		return powerY;
+	}
+
+	public float lightSourceWidth(){
+		return SpringLightGeometry.bodyLocalSourceWidth(width, height, powerX, powerY);
+	}
+
+	public float lightSourceDepth(){
+		return SpringLightGeometry.bodyLocalSourceDepth(width, height, powerX, powerY);
 	}
 
 	@Override
 	public void activity(){
-		if(Math.abs(body.getPosition().x - initialPosition.x) >= limitPosition.x){
+		SpringMotion.localDisplacement(body.getPosition(), initialPosition, body.getAngle(), localDisplacement);
+		if(Math.abs(localDisplacement.x) >= limitPosition.x){
 			initiate();
 		}
-		if(Math.abs(body.getPosition().y - initialPosition.y) >= limitPosition.y){
+		if(Math.abs(localDisplacement.y) >= limitPosition.y){
 			initiate();
 		}
 	}

@@ -44,6 +44,7 @@ public final class EditorTmxReader {
 		float width = element.getFloatAttribute("width", defaultWidth(type));
 		float height = element.getFloatAttribute("height", defaultHeight(type));
 		EditorLevelObject object = new EditorLevelObject(type, x, y, width, height);
+		object.unsupportedTmxType = unsupportedTmxType(groupName, element);
 		object.rotation = element.getFloatAttribute("rotation", 0f);
 		readProperties(object, element);
 		Element polygon = element.getChildByName("polygon");
@@ -75,6 +76,24 @@ public final class EditorTmxReader {
 				return type;
 		}
 		return EditorObjectType.SOLID;
+	}
+
+	private static String unsupportedTmxType(String groupName, Element element){
+		if("Spawn".equals(groupName) && "Ball".equals(element.getAttribute("name", "")))
+			return null;
+		if(element.getChildByName("polyline") != null || element.getChildByName("polygon") != null)
+			return null;
+		String typeName = element.getAttribute("type", "");
+		if(typeName.length() == 0)
+			typeName = propertyValue(element, "type", "");
+		if(typeName.length() == 0 || isBalancoireType(typeName))
+			return null;
+		for(EditorObjectType type : EditorObjectType.values()){
+			if(type.name().equalsIgnoreCase(typeName) || type.label.equalsIgnoreCase(typeName)
+					|| (type.tmxType != null && type.tmxType.equalsIgnoreCase(typeName)))
+				return null;
+		}
+		return typeName;
 	}
 
 	private static boolean isBalancoireType(String typeName){

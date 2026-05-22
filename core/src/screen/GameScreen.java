@@ -1,17 +1,22 @@
 package screen;
 
 import utils.Data;
+import utils.DebugBridge;
 import utils.DebugConfig;
 import utils.LecteurCarte;
 import utils.LevelProgression;
+import utils.LightCollisionCategories;
 import utils.MyCamera;
 import utils.OrthogonalTiledMapRendererWithSprites;
 import utils.PlatformInfo;
+import utils.SpringLightGeometry;
+import utils.SpringLightSystem;
 import utils.Variables;
 import utils.WaterRefractionRenderer;
 import utils.WaterSplashSystem;
 import bodies.Eau;
 import bodies.Obstacle;
+import bodies.Spring;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
@@ -99,6 +104,7 @@ public class GameScreen extends InputAdapter implements Screen{
 	private PolygonSpriteBatch polyBatch;
 	private WaterSplashSystem waterSplashSystem;
 	private WaterRefractionRenderer waterRefractionRenderer;
+	private SpringLightSystem springLightSystem;
 
 	/***************Sounds****************/
 	private Sound soundWin, soundFall, soundWater, soundChock, soundSpring;
@@ -123,6 +129,7 @@ public class GameScreen extends InputAdapter implements Screen{
     private boolean transitionFallbackLogged;
     private boolean debugAutoAdvanceTriggered;
     private float debugAutoAdvanceElapsed;
+    private float debugSpringLightElapsed = SpringLightGeometry.FADE_SECONDS;
     private String lastRestartLayoutLog;
     private String lastCameraLayoutLog;
 	private final Vector2 transitionVelocity = new Vector2();
@@ -140,6 +147,7 @@ public class GameScreen extends InputAdapter implements Screen{
 		this.editorReturnScreen = editorReturnScreen;
 
 		Variables.levelComplete = false;
+		DebugBridge.setCurrentLevel(Variables.niveauSelectione);
 		DebugConfig.log("GameScreen construct begin level=" + Variables.niveauSelectione
 				+ " graphics=" + Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight()
 				+ " backBuffer=" + Gdx.graphics.getBackBufferWidth() + "x" + Gdx.graphics.getBackBufferHeight());
@@ -187,6 +195,8 @@ public class GameScreen extends InputAdapter implements Screen{
         tiledMapRenderer = new OrthogonalTiledMapRendererWithSprites(tiledMap,Variables.WORLD_TO_BOX, game.batch);
 
         lecteurCarte = new LecteurCarte(gam, tiledMap, world, camera, couleurs);
+        LightCollisionCategories.applyToWorld(world);
+        springLightSystem = new SpringLightSystem(world);
         DebugConfig.log("level objects level=" + Variables.niveauSelectione
 				+ " obstacles=" + lecteurCarte.obstacles.size
 				+ " drawObstacles=" + lecteurCarte.obstaclesOrganises.size
@@ -251,7 +261,7 @@ public class GameScreen extends InputAdapter implements Screen{
 
 	@Override
 	public void render(float delta) {
-		float frameDelta = Math.min(delta, MAX_FRAME_DELTA);
+		float frameDelta = DebugConfig.fixedStep ? Variables.BOX_STEP : Math.min(delta, MAX_FRAME_DELTA);
 		Gdx.gl.glClearColor(couleurs.getCouleurFond().r,couleurs.getCouleurFond().g,couleurs.getCouleurFond().b,1);
 		//Gdx.gl.glClearColor(0, 0, 0, 1);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -267,6 +277,9 @@ public class GameScreen extends InputAdapter implements Screen{
 			waterSplashSystem.update(frameDelta);
 		if(waterRefractionRenderer != null && !Variables.levelComplete)
 			waterRefractionRenderer.update(frameDelta);
+		if(springLightSystem != null)
+			springLightSystem.update(frameDelta);
+		updateDebugSpringLightProbe(frameDelta);
 
         camera.mouvement(lecteurCarte.balle, tiledMap, frameDelta);
         camera.update();
@@ -276,6 +289,8 @@ public class GameScreen extends InputAdapter implements Screen{
 			levelComplete(frameDelta);
 		else
 			drawGameplay(true);
+		if(springLightSystem != null && !gameCompleted)
+			springLightSystem.render(camera);
 
 		//Level lost
         if(!Variables.levelComplete && lecteurCarte.balle.getY() < -5){
@@ -357,10 +372,12 @@ public class GameScreen extends InputAdapter implements Screen{
 	}
 
 	private void activateSpring(Fixture springFixture){
-		for(Obstacle spring : lecteurCarte.springs){
+		for(Spring spring : lecteurCarte.springs){
 			if(spring.body == springFixture.getBody()){
 				spring.actif();
 				soundSpring.play();
+				if(springLightSystem != null)
+					springLightSystem.activate(spring);
 				return;
 			}
 		}
@@ -459,6 +476,8 @@ public class GameScreen extends InputAdapter implements Screen{
         resizeFrameBuffer(Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         if(waterRefractionRenderer != null)
 			waterRefractionRenderer.resize(Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+        if(springLightSystem != null)
+			springLightSystem.resize(Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         if(transitionInitialized){
 			transitionStartRadius = getBackBufferDiagonal();
 			updateVignetteState();
@@ -490,8 +509,6 @@ public class GameScreen extends InputAdapter implements Screen{
 			lecteurCarte.disposeResources();
 		if(tiledMap != null)
 			tiledMap.dispose();
-		if(world != null)
-			world.dispose();
 		if(debugRenderer != null)
 			debugRenderer.dispose();
 		if(stage != null)
@@ -504,6 +521,10 @@ public class GameScreen extends InputAdapter implements Screen{
 			polyBatch.dispose();
 		if(waterRefractionRenderer != null)
 			waterRefractionRenderer.dispose();
+		if(springLightSystem != null)
+			springLightSystem.dispose();
+		if(world != null)
+			world.dispose();
 		if(shaderProgram != null)
 			shaderProgram.dispose();
 		if(fbo != null)
@@ -944,7 +965,6 @@ public class GameScreen extends InputAdapter implements Screen{
 			return;
 		nextLevelQueued = true;
 		int nextLevel = LevelProgression.nextLevel(Variables.niveauSelectione, Variables.nombreNiveaux);
-		Data.setLevel(nextLevel);
 		DebugConfig.log("queue next level from=" + Variables.niveauSelectione + " to=" + nextLevel
 				+ " elapsed=" + transitionElapsed);
 		Gdx.app.postRunnable(new Runnable() {
@@ -981,6 +1001,20 @@ public class GameScreen extends InputAdapter implements Screen{
 			DebugConfig.log("debug auto advance trigger level=" + Variables.niveauSelectione
 					+ " after=" + debugAutoAdvanceElapsed);
 			startLevelComplete();
+		}
+	}
+
+	private void updateDebugSpringLightProbe(float delta){
+		if(!DebugConfig.springLightProbe || springLightSystem == null || lecteurCarte.springs.size == 0
+				|| Variables.levelComplete || gameCompleted)
+			return;
+		debugSpringLightElapsed += delta;
+		if(debugSpringLightElapsed >= SpringLightGeometry.FADE_SECONDS){
+			debugSpringLightElapsed = 0f;
+			Spring spring = lecteurCarte.springs.first();
+			springLightSystem.activate(spring);
+			DebugConfig.log("spring light probe pulse level=" + Variables.niveauSelectione
+					+ " power=" + spring.getPowerX() + "," + spring.getPowerY());
 		}
 	}
 
@@ -1041,6 +1075,8 @@ public class GameScreen extends InputAdapter implements Screen{
 		Variables.levelComplete = false;
 		Variables.restart = false;
 		Variables.fallRestartDelay = 2.136f;
+		if(editorReturnScreen instanceof LevelEditorScreen)
+			((LevelEditorScreen)editorReturnScreen).returnFromPlaytest();
 		game.setScreen(editorReturnScreen);
 		dispose();
 	}

@@ -11,4 +11,11 @@ public final class DebugBridge {
 		if(windowRef.console && windowRef.console.log)
 			windowRef.console.log("[EpicBallDebug] " + message);
 	}-*/;
+
+	public static native void setCurrentLevel(int level) /*-{
+		var windowRef = $wnd;
+		if(!windowRef.__epicBallState)
+			windowRef.__epicBallState = {};
+		windowRef.__epicBallState.currentLevel = level;
+	}-*/;
 }

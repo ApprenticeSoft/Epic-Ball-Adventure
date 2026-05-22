@@ -79,6 +79,21 @@ public class EditorTmxReaderTest {
 	}
 
 	@Test
+	public void marksUnknownTypedObjectsAsUnsupported(){
+		String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+				+ "<map width=\"20\" height=\"10\" tilewidth=\"32\" tileheight=\"32\">\n"
+				+ " <objectgroup name=\"Objects\">\n"
+				+ "  <object id=\"1\" type=\"Mystery\" x=\"64\" y=\"96\" width=\"128\" height=\"32\"/>\n"
+				+ " </objectgroup>\n"
+				+ "</map>";
+
+		EditorLevel level = EditorTmxReader.read("Unsupported.tmx", xml);
+
+		assertEquals(EditorObjectType.SOLID, level.objects.first().type);
+		assertEquals("Mystery", level.objects.first().unsupportedTmxType);
+	}
+
+	@Test
 	public void importsEveryBundledLevelWithoutDroppingObjects() throws IOException{
 		Path levelsDir = Path.of(System.getProperty("assets.dir"), "Levels");
 		int importedLevels = 0;

@@ -68,6 +68,8 @@ public final class EditorLevelValidator {
 	}
 
 	private static void validateProperties(EditorLevelObject object, Array<String> errors){
+		if(object.unsupportedTmxType != null)
+			errors.add("Unsupported object type would be dropped: " + object.unsupportedTmxType);
 		String[] numericNames = numericPropertyNames(object.type);
 		for(String propertyName : numericNames){
 			String value = object.properties.get(propertyName);

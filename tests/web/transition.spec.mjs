@@ -75,6 +75,116 @@ test('debug water tuning overlay starts and keeps rendering', async ({ page }, t
   }).toBe(true);
 });
 
+test('debug spring light probe activates without freezing level 2', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Desktop capture is enough for the spring probe.');
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if(message.type() === 'error'){
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1&ballStartLevel=2&ballResetProgress=1&ballDebugSpringLight=1');
+    await waitForDebugEvent(page, logs, 'main menu layout', 10000);
+    await startGame(page, testInfo.project.name);
+    await waitForDebugEvent(page, logs, 'level objects level=2', 10000);
+    await waitForDebugEvent(page, logs, 'spring light activated', 10000);
+
+    const frames = await measureAnimationFrames(page, 1200);
+    expect(frames.count).toBeGreaterThanOrEqual(30);
+    expect(frames.maxDelta).toBeLessThan(180);
+    expect(await screenshotHasNonBlackPixels(page)).toBe(true);
+    expect((await getDebugEvents(page)).join('\n')).not.toContain('spring light disabled');
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
+test('plain browser launch starts level 1 even with saved later progress', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Desktop keyboard coverage is enough for restart progress behavior.');
+
+  const errors = [];
+  page.on('console', message => {
+    if(message.type() === 'error')
+      errors.push(message.text());
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+  await page.addInitScript(() => {
+    localStorage.setItem('Epic Ball Adventure.Progress:Leveli', '4');
+  });
+
+  await page.goto('/');
+  await page.locator('canvas').waitFor({ state: 'visible' });
+  await page.bringToFront();
+
+  await expect.poll(async () => await currentRuntimeLevel(page), {
+    timeout: 10000,
+    message: 'Expected normal browser startup to select level 1 despite saved level progress.'
+  }).toBe(1);
+
+  await page.keyboard.press('F');
+  await expect.poll(async () => {
+    const level = await currentRuntimeLevel(page);
+    if(level === 0)
+      await page.keyboard.press('F');
+    return level;
+  }, {
+    timeout: 10000,
+    message: 'Expected normal browser gameplay to start level 1 despite saved level progress.'
+  }).toBe(1);
+
+  expect(errors).toEqual([]);
+});
+
+test('web benchmark query starts gameplay from the browser menu', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'Benchmark startup is covered on the desktop browser viewport.');
+  const logs = [];
+  const errors = [];
+  page.on('console', message => {
+    const text = message.text();
+    logs.push(text);
+    if(message.type() === 'error'){
+      errors.push(text);
+    }
+  });
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+
+  try {
+    await page.goto('/?ballDebug=1&ballBenchmark=1&ballFixedStep=1&ballResetProgress=1&ballStartLevel=1');
+    await waitForDebugEvent(page, logs, 'main menu layout', 10000);
+    await waitForDebugEvent(page, logs, 'loaded tmx level=1', 10000);
+    await expect.poll(async () => await screenshotHasNonBlackPixels(page), {
+      timeout: 5000,
+      message: 'Expected benchmark startup to reach visible gameplay.'
+    }).toBe(true);
+    expect(errors, logs.join('\n')).toEqual([]);
+  }
+  finally {
+    await testInfo.attach('console.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain'
+    });
+    await testInfo.attach('debug-events.log', {
+      body: (await getDebugEvents(page)).join('\n'),
+      contentType: 'text/plain'
+    });
+  }
+});
+
 test('auto-advances through every level without a black screen', async ({ page }, testInfo) => {
   const logs = [];
   const errors = [];
@@ -573,7 +683,7 @@ test('desktop editor can play a pulley pair without a render crash', async ({ pa
 });
 
 async function waitForDebugEvent(page, logs, needle, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Date.now() + effectiveTimeout(timeoutMs);
   while(Date.now() < deadline){
     const debugEvents = await getDebugEvents(page);
     if(debugEvents.some(line => line.includes(needle)) || logs.some(line => line.includes(needle)))
@@ -585,7 +695,7 @@ async function waitForDebugEvent(page, logs, needle, timeoutMs) {
 }
 
 async function waitForDebugEventCount(page, needle, count, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Date.now() + effectiveTimeout(timeoutMs);
   while(Date.now() < deadline){
     const debugEvents = await getDebugEvents(page);
     if(debugEvents.filter(line => line.includes(needle)).length >= count)
@@ -621,6 +731,10 @@ async function getDebugEvents(page) {
   return await page.evaluate(() => window.__epicBallDebugEvents || []);
 }
 
+async function currentRuntimeLevel(page) {
+  return await page.evaluate(() => window.__epicBallState?.currentLevel || 0);
+}
+
 async function latestDebugEvent(page, needle) {
   const debugEvents = await getDebugEvents(page);
   for(let i = debugEvents.length - 1; i >= 0; i--){
@@ -631,7 +745,7 @@ async function latestDebugEvent(page, needle) {
 }
 
 async function waitForRestartScreenChange(page, previousScreen, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Date.now() + effectiveTimeout(timeoutMs);
   while(Date.now() < deadline){
     const latest = await latestDebugEvent(page, 'restart label layout');
     const layout = parseLayoutEvent(latest);
@@ -642,6 +756,12 @@ async function waitForRestartScreenChange(page, previousScreen, timeoutMs) {
   }
   const debugEvents = await getDebugEvents(page);
   throw new Error(`Timed out waiting for restart layout to resize. Events:\n${debugEvents.join('\n')}`);
+}
+
+function effectiveTimeout(timeoutMs) {
+  if(process.env.WEB_BASE_URL)
+    return Math.max(timeoutMs, 30000);
+  return timeoutMs;
 }
 
 async function startGame(page, projectName) {

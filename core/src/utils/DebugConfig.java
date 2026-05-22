@@ -9,8 +9,13 @@ public final class DebugConfig {
 	public static boolean showRestartOverlay;
 	public static boolean startEditor;
 	public static boolean waterBubbleProbe;
+	public static boolean springLightProbe;
 	public static boolean waterTuningOverlay;
 	public static boolean editorInvalidPlayProbe;
+	public static boolean resetProgress;
+	public static boolean desktopBenchmark;
+	public static boolean webBenchmark;
+	public static boolean fixedStep;
 	public static boolean adaptiveBubbleThrottle = true;
 	public static float autoAdvanceDelay = 0.35f;
 	public static float waterBubbleDensityMultiplier = 1f;
@@ -25,7 +30,12 @@ public final class DebugConfig {
 
 	public static boolean isEnabled(){
 		return transitionLogs || autoAdvanceLevels || showRestartOverlay || startEditor
-				|| waterBubbleProbe || waterTuningOverlay || editorInvalidPlayProbe || editorLoadLevel > 0;
+				|| waterBubbleProbe || springLightProbe || waterTuningOverlay || editorInvalidPlayProbe || resetProgress
+				|| desktopBenchmark || webBenchmark || fixedStep || startLevel > 1 || editorLoadLevel > 0;
+	}
+
+	public static boolean benchmarkMode(){
+		return desktopBenchmark || webBenchmark;
 	}
 
 	public static float waterBubbleDensityScale(){
@@ -81,8 +91,13 @@ public final class DebugConfig {
 		showRestartOverlay = false;
 		startEditor = false;
 		waterBubbleProbe = false;
+		springLightProbe = false;
 		waterTuningOverlay = false;
 		editorInvalidPlayProbe = false;
+		resetProgress = false;
+		desktopBenchmark = false;
+		webBenchmark = false;
+		fixedStep = false;
 		adaptiveBubbleThrottle = true;
 		autoAdvanceDelay = 0.35f;
 		waterBubbleDensityMultiplier = 1f;

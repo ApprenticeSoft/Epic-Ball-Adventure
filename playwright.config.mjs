@@ -1,21 +1,24 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const baseURL = process.env.WEB_BASE_URL || 'http://127.0.0.1:8091';
+const localWebServer = process.env.WEB_BASE_URL ? undefined : {
+  command: 'python3 -m http.server 8091 --bind 127.0.0.1 --directory html/build/dist',
+  url: baseURL,
+  reuseExistingServer: !process.env.CI,
+  timeout: 10000
+};
+
 export default defineConfig({
   testDir: './tests/web',
   timeout: 60000,
   workers: 1,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:8091',
+    baseURL,
     browserName: 'chromium',
     trace: 'retain-on-failure'
   },
-  webServer: {
-    command: 'python3 -m http.server 8091 --bind 127.0.0.1 --directory html/build/dist',
-    url: 'http://127.0.0.1:8091',
-    reuseExistingServer: !process.env.CI,
-    timeout: 10000
-  },
+  ...(localWebServer ? { webServer: localWebServer } : {}),
   projects: [
     {
       name: 'desktop',

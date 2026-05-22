@@ -10,6 +10,9 @@ This is a multi-platform LibGDX Java project. Shared game code lives in `core/sr
 - `./gradlew :core:test` runs the JUnit 5 test suite for shared logic.
 - `./gradlew :html:dist` builds the GWT/WebGL package into `html/build/dist`.
 - `npm run test:web-transition` runs Playwright tests in `tests/web`; build `:html:dist` first so the local web server has current files.
+- `npm run benchmark:web` writes browser benchmark evidence and a screenshot under `build/reports/`.
+- `npm run screenshot:web` captures browser screenshots for menu, game, or editor scenes.
+- `npm run verify:web-live` smoke-tests the deployed Pi site at `https://ball.marcvidal.ca`.
 - `./gradlew :android:assembleDebug` builds the Android debug APK and copies native libraries as part of `preBuild`.
 - `./gradlew clean` removes the root Gradle build directory.
 

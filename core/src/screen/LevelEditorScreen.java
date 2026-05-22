@@ -156,6 +156,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 	private String lastLayoutLog;
 	private String lastCameraLog;
 	private boolean hoverDirty = true;
+	private boolean dirty;
 	private int lastHoverScreenX = -1;
 	private int lastHoverScreenY = -1;
 	private float lastHoverCameraX;
@@ -604,7 +605,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			return;
 		leftTable.clear();
 		leftTable.defaults().pad(3f).left().growX();
-		addTitle(leftTable, "LEVEL");
+		addTitle(leftTable, dirty ? "LEVEL *" : "LEVEL");
 		fileNameField = addTextField(leftTable, "File", level.fileName, new TextSetter() {
 			@Override
 			public void set(String value) {
@@ -630,6 +631,11 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 				markHoverDirty();
 			}
 		});
+		Label fileState = new Label((dirty ? "Unsaved changes - " : "Saved - ") + level.fileName, labelStyle);
+		fileState.setFontScale(EDITOR_FONT_SCALE * 0.86f);
+		fileState.setWrap(true);
+		leftTable.add(fileState).growX();
+		leftTable.row();
 		TextButton saveButton = addButton(leftTable, "Save");
 		saveButton.addListener(new ChangeListener() {
 			@Override
@@ -754,7 +760,6 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 				public void set(float value) {
 					recordUndo("Edit rotation");
 					selectedObject.rotation = value;
-					selectedObject.snapMode = SnapMode.FREE;
 					markHoverDirty();
 				}
 			});
@@ -1030,6 +1035,8 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			}
 			String xml = EditorTmxWriter.write(level);
 			String backup = EditorFileBridge.saveTextWithBackup(level.fileName, xml);
+			dirty = false;
+			buildLeftPanel();
 			setStatus(backup == null ? "Saved " + level.fileName : "Saved " + level.fileName + " (backup made)");
 			DebugConfig.log("level editor saved file=" + level.fileName + " objects=" + level.objects.size);
 		}
@@ -1049,6 +1056,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 			selectedObject = null;
 			cameraX = 0f;
 			cameraY = 0f;
+			dirty = false;
 			updateWorldCamera();
 			buildLeftPanel();
 			setStatus("Loaded " + level.fileName);
@@ -1073,6 +1081,17 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		DebugConfig.log("level editor playtest start objects=" + level.objects.size);
 		TiledMap map = EditorTiledMapFactory.build(level);
 		game.setScreen(new GameScreen(game, map, this));
+	}
+
+	void returnFromPlaytest(){
+		cancelDrag();
+		buildLeftPanel();
+		setStatus(dirty ? "Returned from playtest (unsaved changes)" : "Returned from playtest");
+		markHoverDirty();
+		DebugConfig.log("level editor returned from playtest file=" + level.fileName
+				+ " dirty=" + dirty + " selected=" + selectedObjectIndex()
+				+ " camera=" + number(cameraX) + "," + number(cameraY)
+				+ " zoom=" + number(zoom));
 	}
 
 	private void runDebugEditorStartupAction(){
@@ -1160,6 +1179,9 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		while(undoStack.size > MAX_UNDO_STATES)
 			undoStack.removeIndex(0);
 		redoStack.clear();
+		dirty = true;
+		if(statusLabel != null)
+			setStatus("Unsaved changes: " + action);
 	}
 
 	private void recordDragUndo(String action){
@@ -1186,6 +1208,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		}
 		EditorSnapshot snapshot = undoStack.pop();
 		redoStack.add(snapshot(snapshot.action));
+		dirty = true;
 		restoreSnapshot(snapshot);
 		setStatus("Undo: " + snapshot.action);
 	}
@@ -1197,6 +1220,7 @@ public class LevelEditorScreen extends InputAdapter implements Screen {
 		}
 		EditorSnapshot snapshot = redoStack.pop();
 		undoStack.add(snapshot(snapshot.action));
+		dirty = true;
 		restoreSnapshot(snapshot);
 		setStatus("Redo: " + snapshot.action);
 	}

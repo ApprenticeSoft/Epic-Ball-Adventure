@@ -48,4 +48,13 @@ class EditorLevelObjectTest {
 
 		assertEquals(EditorLevelObject.SnapMode.FREE, object.copy().snapMode);
 	}
+
+	@Test
+	void copyPreservesUnsupportedTmxType(){
+		EditorLevelObject object = new EditorLevelObject(EditorObjectType.SOLID, 0f, 0f, 32f, 32f);
+		object.unsupportedTmxType = "Mystery";
+
+		assertEquals("Mystery", object.copy().unsupportedTmxType);
+		assertEquals("Mystery", object.copyExact().unsupportedTmxType);
+	}
 }

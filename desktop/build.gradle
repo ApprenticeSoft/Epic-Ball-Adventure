@@ -13,6 +13,28 @@ sourceSets.main.java.srcDirs = ["src/"]
 
 project.ext.mainClassName = "com.one.button.jam.desktop.DesktopLauncher"
 project.ext.assetsDir = new File("../android/assets")
+project.ext.desktopDebugProperties = [
+        "ball.debug",
+        "ball.autoAdvance",
+        "ball.autoAdvanceDelay",
+        "ball.debugRestartOverlay",
+        "ball.startLevel",
+        "ball.resetProgress",
+        "ball.screenshot",
+        "ball.screenshot.frame",
+        "ball.fixedStep",
+        "ball.benchmark",
+        "ball.benchmarkSeconds",
+        "ball.benchmarkOutput"
+]
+
+def forwardDesktopDebugProperties = { JavaExec task ->
+    project.desktopDebugProperties.each { propertyName ->
+        if (System.getProperty(propertyName) != null) {
+            task.systemProperty propertyName, System.getProperty(propertyName)
+        }
+    }
+}
 
 application {
     mainClass = project.mainClassName
@@ -34,11 +56,32 @@ tasks.named("run", JavaExec).configure {
     workingDir = project.assetsDir
     standardInput = System.in
     ignoreExitValue = true
-    ["ball.screenshot", "ball.screenshot.frame"].each { propertyName ->
-        if (System.getProperty(propertyName) != null) {
-            systemProperty propertyName, System.getProperty(propertyName)
-        }
-    }
+    forwardDesktopDebugProperties(delegate)
+}
+
+tasks.register("desktopBenchmark", JavaExec) {
+    group = "verification"
+    description = "Runs a fixed-duration desktop benchmark and writes JSON evidence under build/reports/desktop-benchmark."
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = project.mainClassName
+    workingDir = project.assetsDir
+    systemProperty "ball.benchmark", "true"
+    systemProperty "ball.resetProgress", "true"
+    systemProperty "ball.benchmarkOutput", rootProject.layout.buildDirectory
+            .file("reports/desktop-benchmark/benchmark.json").get().asFile.absolutePath
+    forwardDesktopDebugProperties(delegate)
+}
+
+tasks.register("desktopScreenshot", JavaExec) {
+    group = "verification"
+    description = "Captures a deterministic desktop screenshot under build/reports/screenshots/desktop."
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = project.mainClassName
+    workingDir = project.assetsDir
+    systemProperty "ball.screenshot", rootProject.layout.buildDirectory
+            .file("reports/screenshots/desktop/menu.png").get().asFile.absolutePath
+    systemProperty "ball.screenshot.frame", "240"
+    forwardDesktopDebugProperties(delegate)
 }
 
 tasks.register("fatJar", Jar) {

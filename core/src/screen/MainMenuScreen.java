@@ -116,7 +116,7 @@ public class MainMenuScreen extends InputAdapter implements Screen{
 					}
 				}
 			});
-		else if(DebugConfig.autoAdvanceLevels)
+		else if(DebugConfig.autoAdvanceLevels || DebugConfig.benchmarkMode())
 			startRequested = true;
 	}
 

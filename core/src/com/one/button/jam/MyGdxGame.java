@@ -2,6 +2,7 @@ package com.one.button.jam;
 
 import screen.LoadingScreen;
 import utils.Data;
+import utils.DebugBridge;
 import utils.DebugConfig;
 import utils.Variables;
 
@@ -17,6 +18,8 @@ public class MyGdxGame extends Game implements ApplicationListener {
 	@Override
 	public void create () {
 		Data.Load();
+		if(DebugConfig.resetProgress)
+			Data.setLevel(1);
 
 		batch = new SpriteBatch();
 		assets = new AssetManager();
@@ -24,10 +27,13 @@ public class MyGdxGame extends Game implements ApplicationListener {
 			Variables.niveauSelectione = Math.max(1, DebugConfig.startLevel);
 			DebugConfig.log("game create startLevel=" + Variables.niveauSelectione
 					+ " autoAdvance=" + DebugConfig.autoAdvanceLevels
-					+ " delay=" + DebugConfig.autoAdvanceDelay);
+					+ " delay=" + DebugConfig.autoAdvanceDelay
+					+ " resetProgress=" + DebugConfig.resetProgress
+					+ " benchmark=" + DebugConfig.benchmarkMode());
 		}
 		else
-			Variables.niveauSelectione = Data.getLevel(Variables.nombreNiveaux);
+			Variables.niveauSelectione = 1;
+		DebugBridge.setCurrentLevel(Variables.niveauSelectione);
 
 		this.setScreen(new LoadingScreen(this));
 	}

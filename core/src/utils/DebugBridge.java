@@ -5,4 +5,7 @@ public final class DebugBridge {
 
 	public static void log(String message){
 	}
+
+	public static void setCurrentLevel(int level){
+	}
 }

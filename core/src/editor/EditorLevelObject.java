@@ -21,6 +21,7 @@ public class EditorLevelObject {
 	public float width;
 	public float height;
 	public float rotation;
+	public String unsupportedTmxType;
 	public SnapMode snapMode = SnapMode.GRID;
 	public final ObjectMap<String, String> properties = new ObjectMap<String, String>();
 	public final Array<Vector2> points = new Array<Vector2>();
@@ -46,6 +47,7 @@ public class EditorLevelObject {
 		this.width = width;
 		this.height = height;
 		rotation = 0f;
+		unsupportedTmxType = null;
 		snapMode = SnapMode.GRID;
 		properties.clear();
 		points.clear();
@@ -59,6 +61,7 @@ public class EditorLevelObject {
 		width = other.width;
 		height = other.height;
 		rotation = other.rotation;
+		unsupportedTmxType = other.unsupportedTmxType;
 		snapMode = other.snapMode;
 		properties.clear();
 		for(ObjectMap.Entry<String, String> entry : other.properties)
@@ -72,6 +75,7 @@ public class EditorLevelObject {
 	public EditorLevelObject copy(){
 		EditorLevelObject copy = new EditorLevelObject(type, x + 32f, y + 32f, width, height);
 		copy.rotation = rotation;
+		copy.unsupportedTmxType = unsupportedTmxType;
 		copy.snapMode = snapMode;
 		for(ObjectMap.Entry<String, String> entry : properties)
 			copy.properties.put(entry.key, entry.value);

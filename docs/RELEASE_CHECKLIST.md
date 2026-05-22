@@ -25,9 +25,10 @@ Run the complete validation set:
 npm run export:play-store-metadata
 npm run verify:play-store-ready
 npm run test:web-transition
+npm run benchmark:web
 ```
 
-When changing GWT-compatible code, assets, web entrypoints, water rendering, transitions, or editor behavior, run both commands before deployment.
+When changing GWT-compatible code, assets, web entrypoints, water rendering, transitions, or editor behavior, run the web build, browser transition suite, and browser benchmark before deployment.
 
 For a Google Play release candidate, prefer the scripted preflight modes:
 
@@ -84,6 +85,7 @@ Verify the served bundle:
 curl -fsSLI https://ball.marcvidal.ca/ | sed -n '1,12p'
 curl -fsSLI https://ball.marcvidal.ca/privacy.html | sed -n '1,12p'
 curl -fsSL https://ball.marcvidal.ca/html/html.nocache.js | rg -o "[0-9A-F]{32}" | head
+npm run verify:web-live
 npm run verify:play-store-live
 ```
 
@@ -91,5 +93,6 @@ Expected result:
 
 - HTTP status is `200 OK` for both `/` and `/privacy.html`.
 - `npm run verify:play-store-live` passes before the privacy URL is used in Play Console.
+- `npm run verify:web-live` reaches live browser gameplay and writes smoke evidence under `build/reports/web-smoke/`.
 - `Last-Modified` reflects the deployed build.
 - The bundle references at least one GWT cache file hash.

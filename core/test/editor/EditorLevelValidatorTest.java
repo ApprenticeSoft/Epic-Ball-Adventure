@@ -80,6 +80,17 @@ public class EditorLevelValidatorTest {
 		assertContains(errors, "Solid is outside world bounds");
 	}
 
+	@Test
+	public void rejectsUnsupportedImportedObjectTypes(){
+		EditorLevel level = new EditorLevel();
+		EditorLevelObject object = level.createObject(EditorObjectType.SOLID, 320, 320);
+		object.unsupportedTmxType = "Mystery";
+
+		Array<String> errors = EditorLevelValidator.validate(level);
+
+		assertContains(errors, "Unsupported object type would be dropped: Mystery");
+	}
+
 	private static void assertContains(Array<String> errors, String expected){
 		for(String error : errors)
 			if(error.equals(expected))
